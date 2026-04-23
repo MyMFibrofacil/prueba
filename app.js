@@ -76,6 +76,9 @@ let searchTerm = "";
 let summaryOpen = false;
 let scrollButtonTimer = null;
 let statusTimer = null;
+let toastTimer = null;
+let emailSubmissionPending = false;
+let pendingEmailStatusMessage = "";
 
 const html = {
   logo: document.getElementById("app-logo"),
@@ -95,6 +98,9 @@ const html = {
   sendButton: document.getElementById("send-whatsapp"),
   sendButtonLabel: document.getElementById("send-button-label"),
   status: document.getElementById("status-message"),
+  toast: document.getElementById("status-toast"),
+  emailForm: document.getElementById("email-send-form"),
+  emailFrame: document.getElementById("email-send-target"),
 };
 
 const lettersConfig = {
@@ -250,6 +256,52 @@ function setFamiliesMessage(message) {
   html.families.innerHTML = `<p class="text-sm text-slate-500">${escapeHtml(message)}</p>`;
 }
 
+function hideToast() {
+  if (!html.toast) return;
+  html.toast.classList.add("opacity-0", "-translate-y-3");
+  html.toast.classList.remove("opacity-100", "translate-y-0");
+  setTimeout(() => {
+    if (!html.toast.classList.contains("opacity-100")) {
+      html.toast.classList.add("hidden");
+    }
+  }, 300);
+}
+
+function showToast(message, tone = "muted") {
+  if (!html.toast || !message || tone === "muted") return;
+  if (toastTimer) clearTimeout(toastTimer);
+
+  html.toast.textContent = message;
+  html.toast.className =
+    "pointer-events-none fixed left-1/2 top-5 z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 rounded-2xl px-4 py-3 text-sm font-bold shadow-xl opacity-0 -translate-y-3 transition-all duration-300";
+
+  if (tone === "success") {
+    html.toast.classList.add(
+      "border",
+      "border-emerald-200",
+      "bg-emerald-50",
+      "text-emerald-700",
+      "shadow-emerald-900/10"
+    );
+  } else if (tone === "error") {
+    html.toast.classList.add(
+      "border",
+      "border-red-200",
+      "bg-red-50",
+      "text-red-700",
+      "shadow-red-900/10"
+    );
+  }
+
+  html.toast.classList.remove("hidden");
+  requestAnimationFrame(() => {
+    html.toast.classList.remove("opacity-0", "-translate-y-3");
+    html.toast.classList.add("opacity-100", "translate-y-0");
+  });
+
+  toastTimer = setTimeout(hideToast, 2600);
+}
+
 function setStatus(message, tone = "muted") {
   if (!html.status) return;
   if (statusTimer) clearTimeout(statusTimer);
@@ -263,6 +315,13 @@ function setStatus(message, tone = "muted") {
     html.status.classList.add("text-red-600");
   } else {
     html.status.classList.add("text-slate-500");
+  }
+
+  if (!message) {
+    if (toastTimer) clearTimeout(toastTimer);
+    hideToast();
+  } else {
+    showToast(message, tone);
   }
 
   if (message) {
@@ -421,6 +480,63 @@ function clearAllLetters() {
   render();
 }
 
+function clearActiveSection() {
+  const section = getActiveThickness();
+  if (!section) return;
+
+  if (isLettersSection(section.id)) {
+    lettersConfig.letters.forEach((letter) => {
+      lettersConfig.sizes.forEach((size) => {
+        letterState.quantities[letter][size] = 0;
+      });
+    });
+    setStatus(`Se limpio la categoria ${section.name}.`, "success");
+    render();
+    return;
+  }
+
+  if (section.type === "price-list") {
+    section.products.forEach((product) => {
+      delete productQuantities[product.id];
+    });
+    setStatus(`Se limpio la categoria ${section.name}.`, "success");
+    render();
+    return;
+  }
+
+  section.families.forEach((family) => {
+    delete familyQuantities[family.id];
+    family.products.forEach((product) => {
+      delete productQuantities[product.id];
+    });
+  });
+  setStatus(`Se limpio la categoria ${section.name}.`, "success");
+  render();
+}
+
+function clearCurrentOrder() {
+  Object.keys(familyQuantities).forEach((key) => {
+    delete familyQuantities[key];
+  });
+
+  Object.keys(productQuantities).forEach((key) => {
+    delete productQuantities[key];
+  });
+
+  lettersConfig.letters.forEach((letter) => {
+    lettersConfig.sizes.forEach((size) => {
+      letterState.quantities[letter][size] = 0;
+    });
+  });
+
+  summaryOpen = false;
+  render();
+
+  if (html.catalogScroll) {
+    html.catalogScroll.scrollTo({ top: 0, behavior: "smooth" });
+  }
+}
+
 function summarizeLettersSection() {
   const lines = lettersConfig.letters
     .map((letter) => {
@@ -462,9 +578,21 @@ function summarizeLettersSection() {
 
   const subtotal = Object.values(sizeSubtotals).reduce((sum, value) => sum + value, 0);
   const tax = subtotal * lettersConfig.taxRate;
+  const groupedBySize = lettersConfig.sizes
+    .map((size) => ({
+      size,
+      items: lettersConfig.letters
+        .map((letter) => ({
+          letter,
+          qty: letterState.quantities[letter]?.[size] || 0,
+        }))
+        .filter((item) => item.qty > 0),
+    }))
+    .filter((group) => group.items.length > 0);
 
   return {
     lines,
+    groupedBySize,
     sizeTotals,
     sizeSubtotals,
     total: Object.values(sizeTotals).reduce((sum, qty) => sum + qty, 0),
@@ -680,11 +808,8 @@ function renderFamilyCard(family) {
   `;
 }
 
-function renderLettersSection() {
-  const filteredLetters = getFilteredLetters();
-  const activeFilterLabel = getActiveLetterFilterLabel(filteredLetters.length);
-
-  const steps = lettersConfig.quickSteps
+function renderQuickStepButtons() {
+  return lettersConfig.quickSteps
     .map((step) => {
       const active = step === letterState.step;
       return `
@@ -700,6 +825,13 @@ function renderLettersSection() {
       `;
     })
     .join("");
+}
+
+function renderLettersSection() {
+  const filteredLetters = getFilteredLetters();
+  const activeFilterLabel = getActiveLetterFilterLabel(filteredLetters.length);
+
+  const steps = renderQuickStepButtons();
 
   const filters = lettersConfig.filters
     .map((filter) => {
@@ -800,22 +932,13 @@ function renderLettersSection() {
         </div>
         <div class="flex gap-2 overflow-x-auto scrollbar-hide">${steps}</div>
         <div class="flex gap-2 overflow-x-auto scrollbar-hide">${filters}</div>
-        <div class="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            data-letter-clear="loaded"
-            class="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"
-          >
-            Limpiar cargadas
-          </button>
-          <button
-            type="button"
-            data-letter-clear="all"
-            class="rounded-2xl bg-primary px-3 py-2.5 text-xs font-bold text-white"
-          >
-            Limpiar todo
-          </button>
-        </div>
+        <button
+          type="button"
+          data-category-clear="active"
+          class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"
+        >
+          Limpiar categoria
+        </button>
       </div>
       <div class="flex items-center justify-between gap-3 px-1">
         <div>
@@ -851,9 +974,24 @@ function renderPriceListSection(section) {
 
   html.families.innerHTML = `
     <section class="space-y-3">
-      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
-        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Categoria</p>
-        <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(section.name)}</p>
+      <div class="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
+        <div class="flex items-center justify-between gap-3">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Categoria</p>
+            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(section.name)}</p>
+          </div>
+          <p class="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+            Paso ${escapeHtml(letterState.step)}
+          </p>
+        </div>
+        <div class="flex gap-2 overflow-x-auto scrollbar-hide">${renderQuickStepButtons()}</div>
+        <button
+          type="button"
+          data-category-clear="active"
+          class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"
+        >
+          Limpiar categoria
+        </button>
       </div>
       <div class="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden bg-white">
         ${filteredProducts
@@ -949,14 +1087,15 @@ function summary() {
       const lettersSummary = summarizeLettersSection();
       if (lettersSummary.total > 0) {
         totalsByThickness[section.id] = lettersSummary.total;
-        totalsByValue[section.id] = lettersSummary.totalWithTax;
+        totalsByValue[section.id] = lettersSummary.subtotal;
         totalCount += lettersSummary.total;
-        totalValue += lettersSummary.totalWithTax;
+        totalValue += lettersSummary.subtotal;
         sections.push({
           id: section.id,
           name: section.name,
           type: "letters",
           totalCount: lettersSummary.total,
+          groupedBySize: lettersSummary.groupedBySize,
           sizeTotals: lettersSummary.sizeTotals,
           sizeSubtotals: lettersSummary.sizeSubtotals,
           subtotal: lettersSummary.subtotal,
@@ -984,9 +1123,9 @@ function summary() {
       const totalWithTax = subtotal + tax;
 
       totalsByThickness[section.id] = quantity;
-      totalsByValue[section.id] = totalWithTax;
+      totalsByValue[section.id] = subtotal;
       totalCount += quantity;
-      totalValue += totalWithTax;
+      totalValue += subtotal;
 
       sections.push({
         id: section.id,
@@ -1080,11 +1219,27 @@ function summary() {
   };
 }
 
+function formatGrandTotal(data) {
+  if (summaryMode === "value") {
+    return formatCurrency(data.totalValue);
+  }
+
+  return `${data.totalCount} items`;
+}
+
+function formatSectionSummaryValue(section, data) {
+  if (summaryMode === "value") {
+    return formatCurrency(data.totalsByValue[section.id] || 0);
+  }
+
+  return formatSectionCount(section.id, data.totalsByThickness[section.id] || 0);
+}
+
 function renderSummary() {
   const data = summary();
 
   if (html.summaryTotals) {
-    html.summaryTotals.innerHTML = getAvailableSections()
+    const totalsMarkup = getAvailableSections()
       .map((section) => {
         const count = data.totalsByThickness[section.id] || 0;
         const value = data.totalsByValue[section.id] || 0;
@@ -1100,6 +1255,17 @@ function renderSummary() {
         `;
       })
       .join("");
+
+    const grandTotalMarkup = `
+      <div class="mt-2 border-t border-slate-200 pt-2">
+        <div class="flex items-center justify-between gap-3">
+          <p class="text-sm font-extrabold text-primary">Total general:</p>
+          <p class="text-sm font-extrabold text-primary shrink-0">${escapeHtml(formatGrandTotal(data))}</p>
+        </div>
+      </div>
+    `;
+
+    html.summaryTotals.innerHTML = `${totalsMarkup}${grandTotalMarkup}`;
   }
 
   html.sendButton.disabled = data.totalCount === 0;
@@ -1109,7 +1275,7 @@ function renderSummary() {
       '<p class="p-4 text-sm text-slate-500">Todavia no agregaste items al pedido.</p>';
     summaryOpen = false;
   } else {
-    html.summaryDetailsList.innerHTML = data.sections
+    const sectionsMarkup = data.sections
       .map((section) => {
         if (section.type === "letters") {
           return `
@@ -1118,53 +1284,29 @@ function renderSummary() {
                 <p class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeHtml(section.name)}</p>
               </div>
               <div class="p-4 space-y-3">
-                <div class="grid grid-cols-4 gap-2">
-                  ${lettersConfig.sizes
-                    .map((size) => {
-                      const total = section.sizeTotals[size] || 0;
-                      const subtotal = section.sizeSubtotals[size] || 0;
-                      return `
-                        <div class="rounded-lg bg-slate-50 px-3 py-2 text-center">
-                          <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">${escapeHtml(size)}</p>
-                          <p class="mt-1 text-sm font-bold text-slate-800">${total}</p>
-                          <p class="mt-1 text-[11px] text-slate-500">${escapeHtml(formatCurrency(subtotal))}</p>
+                ${section.groupedBySize
+                  .map((group) => {
+                    return `
+                      <div class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+                        <div class="px-3 py-2 bg-slate-50 border-b border-slate-200">
+                          <p class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeHtml(group.size)}mm</p>
                         </div>
-                      `;
-                    })
-                    .join("")}
-                </div>
-                <div class="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">
-                  <div class="flex items-center justify-between gap-3 text-xs">
-                    <p class="font-semibold text-slate-600">Subtotal</p>
-                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.subtotal))}</p>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 text-xs">
-                    <p class="font-semibold text-slate-600">IVA</p>
-                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.tax))}</p>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 text-sm">
-                    <p class="font-bold text-primary">Total con IVA</p>
-                    <p class="font-bold text-primary">${escapeHtml(formatCurrency(section.totalWithTax))}</p>
-                  </div>
-                </div>
-                <div class="space-y-1">
-                  ${section.letters
-                    .map((line) => {
-                      const detail = line.perSize
-                        .map((item) => `${item.size}mm: ${item.qty}`)
-                        .join(" | ");
-                      return `
-                        <div class="flex items-start justify-between gap-3 text-xs">
-                          <p class="font-semibold text-slate-800">${escapeHtml(line.letter)}</p>
-                          <div class="text-right">
-                            <p class="text-slate-500">${escapeHtml(detail)}</p>
-                            <p class="mt-0.5 font-semibold text-slate-700">${escapeHtml(formatCurrency(line.subtotal))}</p>
-                          </div>
+                        <div class="px-3 py-3 space-y-2">
+                          ${group.items
+                            .map((item) => {
+                              return `
+                                <div class="flex items-start justify-between gap-3 text-sm">
+                                  <p class="font-semibold text-slate-700">- ${escapeHtml(item.letter)}:</p>
+                                  <p class="font-semibold text-slate-900 shrink-0">${item.qty}</p>
+                                </div>
+                              `;
+                            })
+                            .join("")}
                         </div>
-                      `;
-                    })
-                    .join("")}
-                </div>
+                      </div>
+                    `;
+                  })
+                  .join("")}
               </div>
             </div>
           `;
@@ -1177,30 +1319,13 @@ function renderSummary() {
                 <p class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeHtml(section.name)}</p>
               </div>
               <div class="p-4 space-y-3">
-                <div class="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">
-                  <div class="flex items-center justify-between gap-3 text-xs">
-                    <p class="font-semibold text-slate-600">Subtotal</p>
-                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.subtotal))}</p>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 text-xs">
-                    <p class="font-semibold text-slate-600">IVA</p>
-                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.tax))}</p>
-                  </div>
-                  <div class="flex items-center justify-between gap-3 text-sm">
-                    <p class="font-bold text-primary">Total con IVA</p>
-                    <p class="font-bold text-primary">${escapeHtml(formatCurrency(section.totalWithTax))}</p>
-                  </div>
-                </div>
-                <div class="space-y-1">
+                <div class="space-y-2">
                   ${section.products
                     .map((product) => {
                       return `
-                        <div class="flex items-start justify-between gap-3 text-xs">
-                          <div class="min-w-0">
-                            <p class="font-semibold text-slate-800">${escapeHtml(product.name)}</p>
-                            <p class="text-slate-500">${product.qty} x ${escapeHtml(formatCurrency(product.unitPrice))}</p>
-                          </div>
-                          <p class="font-semibold text-slate-700 shrink-0">${escapeHtml(formatCurrency(product.subtotal))}</p>
+                        <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                          <p class="text-sm font-semibold text-slate-800">${escapeHtml(product.name)}</p>
+                          <p class="mt-1 text-xs text-slate-500">- Cantidad: ${product.qty}</p>
                         </div>
                       `;
                     })
@@ -1254,6 +1379,36 @@ function renderSummary() {
         `;
       })
       .join("");
+
+    const grandTotalDetailsMarkup = `
+      <div class="px-4 py-4 bg-slate-50">
+        <div class="rounded-xl border border-primary/15 bg-white overflow-hidden">
+          <div class="px-4 py-3 border-b border-slate-200 bg-slate-50">
+            <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Resumen final</p>
+          </div>
+          <div class="px-4 py-3 space-y-2">
+            ${data.sections
+              .map((section) => {
+                return `
+                  <div class="flex items-center justify-between gap-3 text-sm">
+                    <p class="font-bold text-slate-700">Total ${escapeHtml(section.name)}:</p>
+                    <p class="font-bold text-slate-900 shrink-0">${escapeHtml(formatSectionSummaryValue(section, data))}</p>
+                  </div>
+                `;
+              })
+              .join("")}
+            <div class="border-t border-slate-200 pt-2">
+              <div class="flex items-center justify-between gap-3 text-sm">
+                <p class="font-extrabold text-primary">Total general:</p>
+                <p class="font-extrabold text-primary">${escapeHtml(formatGrandTotal(data))}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    html.summaryDetailsList.innerHTML = `${sectionsMarkup}${grandTotalDetailsMarkup}`;
   }
 
   html.summaryDetailsPanel.classList.toggle("hidden", !summaryOpen);
@@ -1262,7 +1417,7 @@ function renderSummary() {
 
 function buildWhatsAppText() {
   const data = summary();
-  const lines = ["Hola, comparto el siguiente pedido:"];
+  const lines = [];
 
   data.sections.forEach((section) => {
     const sectionMeta = getThickness(section.id);
@@ -1274,27 +1429,21 @@ function buildWhatsAppText() {
     lines.push(`*${sectionLabel}*`);
 
     if (section.type === "letters") {
-      section.letters.forEach((line) => {
-        const detail = line.perSize
-          .map((item) => `${item.size}mm x${item.qty}`)
-          .join(" | ");
-        lines.push(`- ${line.letter}: ${detail} = ${formatCurrency(line.subtotal)}`);
+      section.groupedBySize.forEach((group) => {
+        lines.push("");
+        lines.push(`${group.size}mm`);
+        group.items.forEach((item) => {
+          lines.push(`- ${item.letter}: ${item.qty}`);
+        });
       });
-      lines.push(`Subtotal: ${formatCurrency(section.subtotal)}`);
-      lines.push(`IVA: ${formatCurrency(section.tax)}`);
-      lines.push(`Total con IVA: ${formatCurrency(section.totalWithTax)}`);
-      lines.push(`*Total ${sectionMeta.summaryLabel}: ${formatSectionCount(section.id, section.totalCount)}*`);
       return;
     }
 
     if (section.type === "price-list") {
       section.products.forEach((product) => {
-        lines.push(`- ${product.name}: ${product.qty} x ${formatCurrency(product.unitPrice)} = ${formatCurrency(product.subtotal)}`);
+        lines.push(`${product.name}`);
+        lines.push(`- Cantidad: ${product.qty}`);
       });
-      lines.push(`Subtotal: ${formatCurrency(section.subtotal)}`);
-      lines.push(`IVA: ${formatCurrency(section.tax)}`);
-      lines.push(`Total con IVA: ${formatCurrency(section.totalWithTax)}`);
-      lines.push(`*Total ${section.name}: ${formatCurrency(section.totalWithTax)}*`);
       return;
     }
 
@@ -1315,8 +1464,15 @@ function buildWhatsAppText() {
       }
     });
 
-    lines.push(`*Total ${sectionMeta.summaryLabel}: ${formatSectionCount(section.id, section.totalCount)}*`);
   });
+
+  lines.push("");
+  lines.push("RESUMEN FINAL");
+  data.sections.forEach((section) => {
+    lines.push(`*Total ${section.name}: ${formatSectionSummaryValue(section, data)}*`);
+  });
+  lines.push("");
+  lines.push(`*Total general: ${formatGrandTotal(data)}*`);
 
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -1351,9 +1507,151 @@ async function copyText(text) {
   return copied;
 }
 
-async function sendToWhatsApp() {
+function getSendMode() {
+  if (clientConfig?.sendMode === "form-post-email") return "form-post-email";
+  if (clientConfig?.sendMode === "direct-email") return "direct-email";
+  if (clientConfig?.sendMode === "email") return "email";
+  return "whatsapp";
+}
+
+function getOrderDateLabel() {
+  return new Intl.DateTimeFormat("es-AR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date());
+}
+
+function getEmailSubject() {
+  const explicitSubject = String(clientConfig?.emailSubject || "").trim();
+  if (explicitSubject) return explicitSubject;
+
+  const subjectPrefix = String(clientConfig?.emailSubjectPrefix || `Pedido ${clientConfig?.name || ""}`.trim() || "Pedido");
+  return `${subjectPrefix} - ${getOrderDateLabel()}`;
+}
+
+function buildEmailLink(text) {
+  const recipient = String(clientConfig?.emailTo || "").trim();
+  const params = new URLSearchParams({
+    subject: getEmailSubject(),
+    body: text,
+  });
+  return `mailto:${recipient}?${params.toString()}`;
+}
+
+async function sendDirectEmail(text) {
+  const endpoint = String(clientConfig?.sendEndpoint || "").trim();
+  if (!endpoint) {
+    throw new Error("Falta configurar el endpoint de envio de mail.");
+  }
+
+  const payload = JSON.stringify({
+    from: "mymfibrofacil.web@gmail.com",
+    to: String(clientConfig?.emailTo || "").trim(),
+    subject: getEmailSubject(),
+    body: text,
+    clientKey,
+    clientName: clientConfig?.name || "",
+    createdAt: new Date().toISOString(),
+  });
+
+  if (navigator.sendBeacon) {
+    const queued = navigator.sendBeacon(
+      endpoint,
+      new Blob([payload], { type: "text/plain;charset=UTF-8" })
+    );
+    if (queued) return;
+  }
+
+  await fetch(endpoint, {
+    method: "POST",
+    mode: "no-cors",
+    headers: {
+      "Content-Type": "text/plain;charset=UTF-8",
+    },
+    body: payload,
+    keepalive: true,
+  });
+}
+
+function submitEmailForm(text) {
+  if (!html.emailForm) {
+    throw new Error("No se encontro el formulario de envio.");
+  }
+
+  const endpoint = String(clientConfig?.sendEndpoint || "").trim();
+  if (!endpoint) {
+    throw new Error("Falta configurar el endpoint de envio de mail.");
+  }
+
+  html.emailForm.action = endpoint;
+
+  const assignValue = (name, value) => {
+    const field = html.emailForm.elements.namedItem(name);
+    if (!field) return;
+    field.value = value;
+  };
+
+  assignValue("from", "mymfibrofacil.web@gmail.com");
+  assignValue("to", String(clientConfig?.emailTo || "").trim());
+  assignValue("subject", getEmailSubject());
+  assignValue("body", text);
+  assignValue("client_key", clientKey);
+  assignValue("client_name", clientConfig?.name || "");
+  assignValue("created_at", new Date().toISOString());
+
+  html.emailForm.submit();
+}
+
+async function sendOrder() {
   const text = buildWhatsAppText();
   const copied = await copyText(text);
+  const sendMode = getSendMode();
+
+  if (sendMode === "form-post-email") {
+    try {
+      emailSubmissionPending = true;
+      pendingEmailStatusMessage = copied
+        ? "Pedido enviado por mail y copiado al portapapeles."
+        : "Pedido enviado por mail.";
+      setStatus("Enviando pedido por mail...");
+      submitEmailForm(text);
+    } catch (error) {
+      emailSubmissionPending = false;
+      pendingEmailStatusMessage = "";
+      const detail = error instanceof Error ? error.message : "No se pudo enviar el pedido por mail.";
+      setStatus(detail, "error");
+    }
+    return;
+  }
+
+  if (sendMode === "direct-email") {
+    try {
+      await sendDirectEmail(text);
+      setStatus(
+        copied
+          ? "Pedido enviado por mail y copiado al portapapeles."
+          : "Pedido enviado por mail.",
+        "success"
+      );
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "No se pudo enviar el pedido por mail.";
+      setStatus(detail, "error");
+    }
+    return;
+  }
+
+  if (sendMode === "email") {
+    window.location.href = buildEmailLink(text);
+
+    if (copied) {
+      setStatus("Pedido copiado. Se abrio tu correo con el pedido precargado.", "success");
+    } else {
+      setStatus("Se abrio tu correo. Si no aparece el texto, copialo desde el resumen.", "error");
+    }
+    return;
+  }
+
   const encodedText = encodeURIComponent(text);
   const deepLink = `whatsapp://send?text=${encodedText}`;
   const webLink = `https://api.whatsapp.com/send?text=${encodedText}`;
@@ -1387,14 +1685,14 @@ function bindEvents() {
 
     const familyQtyButton = event.target.closest("[data-family-action][data-family-qty]");
     if (familyQtyButton) {
-      const delta = familyQtyButton.dataset.familyAction === "plus" ? 1 : -1;
+      const delta = familyQtyButton.dataset.familyAction === "plus" ? letterState.step : -letterState.step;
       updateFamilyQty(familyQtyButton.dataset.familyQty, delta);
       return;
     }
 
     const productQtyButton = event.target.closest("[data-product-action][data-product]");
     if (productQtyButton) {
-      const delta = productQtyButton.dataset.productAction === "plus" ? 1 : -1;
+      const delta = productQtyButton.dataset.productAction === "plus" ? letterState.step : -letterState.step;
       updateProductQty(productQtyButton.dataset.product, delta);
       return;
     }
@@ -1421,13 +1719,9 @@ function bindEvents() {
       return;
     }
 
-    const clearLettersButton = event.target.closest("[data-letter-clear]");
-    if (clearLettersButton) {
-      if (clearLettersButton.dataset.letterClear === "loaded") {
-        clearLoadedLetters();
-      } else {
-        clearAllLetters();
-      }
+    const clearCategoryButton = event.target.closest("[data-category-clear]");
+    if (clearCategoryButton) {
+      clearActiveSection();
     }
   });
 
@@ -1460,7 +1754,17 @@ function bindEvents() {
     renderSummary();
   });
 
-  html.sendButton.addEventListener("click", sendToWhatsApp);
+  html.sendButton.addEventListener("click", sendOrder);
+
+  if (html.emailFrame) {
+    html.emailFrame.addEventListener("load", () => {
+      if (!emailSubmissionPending) return;
+      emailSubmissionPending = false;
+      clearCurrentOrder();
+      setStatus(pendingEmailStatusMessage || "Pedido enviado por mail.", "success");
+      pendingEmailStatusMessage = "";
+    });
+  }
 
   if (html.scrollToBottom && html.catalogScroll) {
     html.scrollToBottom.addEventListener("click", () => {

@@ -23,10 +23,14 @@ window.PEDIDOS_CLIENTS = {
     sheetGid: "0",
     catalogMode: "price-list",
     summaryMode: "value",
+    sendMode: "form-post-email",
+    emailTo: "mymfibrofacil@gmail.com",
+    emailSubjectPrefix: "Moreira",
+    sendEndpoint: "https://script.google.com/macros/s/AKfycbzWToLNRLOcAx7O5Ei0306FuQ39qR4d1XSbHK5tiI5npkcqVP-93nIuj3e2vk9z5w6qoQ/exec",
     ui: {
       title: "Pedidos Moreira",
       searchPlaceholder: "Buscar productos...",
-      sendButtonLabel: "Copiar Pedido y Abrir WhatsApp",
+      sendButtonLabel: "Enviar Pedido por Mail",
       detailTitle: "Detalle del pedido",
     },
     thicknessMeta: {
