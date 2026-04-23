@@ -66,6 +66,7 @@ const clientKey = detectClientKey();
 const clientConfig = CLIENTS[clientKey] || CLIENTS[DEFAULT_CLIENT_KEY] || null;
 const thicknessMeta = clientConfig?.thicknessMeta || {};
 const assetPrefix = window.APP_ASSET_PREFIX || "./";
+const summaryMode = clientConfig?.summaryMode || "count";
 
 let catalog = [];
 const familyQuantities = {};
@@ -98,6 +99,10 @@ const html = {
 
 const lettersConfig = {
   materialLabel: clientConfig?.lettersConfig?.materialLabel || "MDF 5 mm",
+  priceRowLabel: clientConfig?.lettersConfig?.priceRowLabel || "$ Unit",
+  taxRate: Number.isFinite(Number(clientConfig?.lettersConfig?.taxRate))
+    ? Number(clientConfig.lettersConfig.taxRate)
+    : 0.21,
   sizes: Array.isArray(clientConfig?.lettersConfig?.sizes) && clientConfig.lettersConfig.sizes.length
     ? clientConfig.lettersConfig.sizes.map((value) => String(value))
     : ["22", "27", "33"],
@@ -115,6 +120,7 @@ const lettersConfig = {
 const letterState = {
   step: lettersConfig.quickSteps[0] || 1,
   filter: lettersConfig.filters[0]?.id || "all",
+  prices: Object.fromEntries(lettersConfig.sizes.map((size) => [size, 0])),
   quantities: Object.fromEntries(
     lettersConfig.letters.map((letter) => [
       letter,
@@ -155,6 +161,18 @@ function getThicknessEntries() {
   return Object.values(thicknessMeta);
 }
 
+function getAvailableSections() {
+  if (catalog.length > 0) return catalog;
+  return getThicknessEntries().map((meta) => ({
+    id: meta.id,
+    name: meta.label,
+    icon: meta.icon,
+    type: meta.type || "catalog",
+    families: [],
+    products: [],
+  }));
+}
+
 function getThickness(id) {
   return thicknessMeta[id] || {
     id,
@@ -168,11 +186,17 @@ function getThickness(id) {
 }
 
 function getSectionType(id) {
+  const loadedSection = catalog.find((section) => section.id === id);
+  if (loadedSection?.type) return loadedSection.type;
   return getThickness(id).type || "catalog";
 }
 
 function isLettersSection(id) {
   return getSectionType(id) === "letters";
+}
+
+function isPriceListSection(id) {
+  return getSectionType(id) === "price-list";
 }
 
 function getSectionUnitLabel(sectionId, count = 0) {
@@ -183,6 +207,15 @@ function getSectionUnitLabel(sectionId, count = 0) {
 
 function formatSectionCount(sectionId, count) {
   return `${count} ${getSectionUnitLabel(sectionId, count)}`;
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: "ARS",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
 }
 
 function applyClientUi() {
@@ -319,8 +352,34 @@ function getLetterTotal(letter) {
   );
 }
 
+function isNumericLetter(value) {
+  return /^\d+$/.test(String(value || ""));
+}
+
+function getActiveLetterFilter() {
+  return (
+    lettersConfig.filters.find((filter) => filter.id === letterState.filter) ||
+    lettersConfig.filters[0] ||
+    null
+  );
+}
+
+function getActiveLetterFilterMode() {
+  return getActiveLetterFilter()?.mode || getActiveLetterFilter()?.id || "letters";
+}
+
+function getActiveLetterFilterLabel(count) {
+  const mode = getActiveLetterFilterMode();
+  if (mode === "numbers") return count === 1 ? "número" : "números";
+  if (mode === "letters") return count === 1 ? "letra" : "letras";
+  return count === 1 ? "carácter" : "caracteres";
+}
+
 function getFilteredLetters() {
   return lettersConfig.letters.filter((letter) => {
+    const activeFilterMode = getActiveLetterFilterMode();
+    if (activeFilterMode === "numbers") return isNumericLetter(letter);
+    if (activeFilterMode === "letters") return !isNumericLetter(letter);
     if (letterState.filter === "vowels") return LETTER_VOWELS.has(letter);
     if (letterState.filter === "consonants") return !LETTER_VOWELS.has(letter);
     if (letterState.filter === "loaded") return getLetterTotal(letter) > 0;
@@ -348,7 +407,7 @@ function clearLoadedLetters() {
       letterState.quantities[letter][size] = 0;
     });
   });
-  setStatus("Se limpiaron las letras cargadas.");
+  setStatus("Se limpiaron los caracteres cargados.");
   render();
 }
 
@@ -358,7 +417,7 @@ function clearAllLetters() {
       letterState.quantities[letter][size] = 0;
     });
   });
-  setStatus("Se limpiaron todas las letras.");
+  setStatus("Se limpiaron todos los caracteres.");
   render();
 }
 
@@ -369,6 +428,7 @@ function summarizeLettersSection() {
         .map((size) => ({
           size,
           qty: letterState.quantities[letter]?.[size] || 0,
+          unitPrice: letterState.prices[size] || 0,
         }))
         .filter((item) => item.qty > 0);
 
@@ -378,6 +438,7 @@ function summarizeLettersSection() {
         letter,
         perSize,
         total: perSize.reduce((sum, item) => sum + item.qty, 0),
+        subtotal: perSize.reduce((sum, item) => sum + item.qty * item.unitPrice, 0),
       };
     })
     .filter(Boolean);
@@ -392,10 +453,24 @@ function summarizeLettersSection() {
     ])
   );
 
+  const sizeSubtotals = Object.fromEntries(
+    lettersConfig.sizes.map((size) => [
+      size,
+      (letterState.prices[size] || 0) * (sizeTotals[size] || 0),
+    ])
+  );
+
+  const subtotal = Object.values(sizeSubtotals).reduce((sum, value) => sum + value, 0);
+  const tax = subtotal * lettersConfig.taxRate;
+
   return {
     lines,
     sizeTotals,
+    sizeSubtotals,
     total: Object.values(sizeTotals).reduce((sum, qty) => sum + qty, 0),
+    subtotal,
+    tax,
+    totalWithTax: subtotal + tax,
   };
 }
 
@@ -409,7 +484,7 @@ function toggleFamily(familyId) {
 }
 
 function renderTabs() {
-  html.tabs.innerHTML = catalog
+  html.tabs.innerHTML = getAvailableSections()
     .map((section) => {
       const active = section.id === activeThickness;
       return `
@@ -607,6 +682,7 @@ function renderFamilyCard(family) {
 
 function renderLettersSection() {
   const filteredLetters = getFilteredLetters();
+  const activeFilterLabel = getActiveLetterFilterLabel(filteredLetters.length);
 
   const steps = lettersConfig.quickSteps
     .map((step) => {
@@ -706,7 +782,7 @@ function renderLettersSection() {
           .join("")
       : `
         <div class="col-span-full rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
-          No hay letras en esta vista.
+          No hay ${escapeHtml(getActiveLetterFilterLabel(2))} en esta vista.
         </div>
       `;
 
@@ -747,13 +823,90 @@ function renderLettersSection() {
           <p class="text-xs font-semibold text-slate-700">3 por fila con 22, 27 y 33 mm</p>
         </div>
         <p class="rounded-full border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600">
-          ${lettersConfig.letters.length} letras
+          ${filteredLetters.length} ${escapeHtml(activeFilterLabel)}
         </p>
       </div>
       <div class="grid grid-cols-3 gap-2">${cards}</div>
     </section>
   `;
 
+  html.empty.classList.add("hidden");
+}
+
+function renderPriceListSection(section) {
+  const filteredProducts = section.products.filter((product) => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (
+      product.name.toLowerCase().includes(term) ||
+      String(product.material || "").toLowerCase().includes(term)
+    );
+  });
+
+  if (filteredProducts.length === 0) {
+    html.families.innerHTML = "";
+    html.empty.classList.remove("hidden");
+    return;
+  }
+
+  html.families.innerHTML = `
+    <section class="space-y-3">
+      <div class="rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Categoria</p>
+        <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(section.name)}</p>
+      </div>
+      <div class="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden bg-white">
+        ${filteredProducts
+          .map((product) => {
+            const qty = getProductQty(product.id);
+            const subtotal = qty * product.unitPrice;
+            return `
+              <div class="p-4 flex items-start justify-between gap-3">
+                <div class="min-w-0 flex-1">
+                  <p class="text-sm font-semibold text-slate-800 break-words">${escapeHtml(product.name)}</p>
+                  <p class="mt-1 text-xs text-slate-500">${escapeHtml(formatCurrency(product.unitPrice))}</p>
+                  ${
+                    subtotal > 0
+                      ? `<p class="mt-1 text-xs font-semibold text-primary">${escapeHtml(formatCurrency(subtotal))}</p>`
+                      : ""
+                  }
+                </div>
+                <div class="flex shrink-0 items-center bg-slate-100 rounded-lg p-1">
+                  <button
+                    data-product-action="minus"
+                    data-product="${escapeHtml(product.id)}"
+                    class="size-8 flex items-center justify-center rounded-md bg-white shadow-sm text-primary"
+                    type="button"
+                  >
+                    <span class="material-symbols-outlined text-lg">remove</span>
+                  </button>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    inputmode="numeric"
+                    value="${qty}"
+                    data-product-input="${escapeHtml(product.id)}"
+                    class="w-12 h-8 text-center font-bold text-sm border-0 bg-transparent focus:ring-0 px-1"
+                  />
+                  <button
+                    data-product-action="plus"
+                    data-product="${escapeHtml(product.id)}"
+                    class="size-8 flex items-center justify-center rounded-md ${
+                      qty > 0 ? "bg-primary text-white" : "bg-white text-primary"
+                    } shadow-sm"
+                    type="button"
+                  >
+                    <span class="material-symbols-outlined text-lg">add</span>
+                  </button>
+                </div>
+              </div>
+            `;
+          })
+          .join("")}
+      </div>
+    </section>
+  `;
   html.empty.classList.add("hidden");
 }
 
@@ -770,6 +923,11 @@ function renderFamilies() {
     return;
   }
 
+  if (section.type === "price-list") {
+    renderPriceListSection(section);
+    return;
+  }
+
   const cards = section.families.map(renderFamilyCard).filter(Boolean).join("");
   html.families.innerHTML = cards;
   html.empty.classList.toggle("hidden", Boolean(cards));
@@ -778,8 +936,12 @@ function renderFamilies() {
 function summary() {
   const sections = [];
   let totalCount = 0;
+  let totalValue = 0;
   const totalsByThickness = Object.fromEntries(
-    getThicknessEntries().map((meta) => [meta.id, 0])
+    getAvailableSections().map((meta) => [meta.id, 0])
+  );
+  const totalsByValue = Object.fromEntries(
+    getAvailableSections().map((meta) => [meta.id, 0])
   );
 
   catalog.forEach((section) => {
@@ -787,16 +949,58 @@ function summary() {
       const lettersSummary = summarizeLettersSection();
       if (lettersSummary.total > 0) {
         totalsByThickness[section.id] = lettersSummary.total;
+        totalsByValue[section.id] = lettersSummary.totalWithTax;
         totalCount += lettersSummary.total;
+        totalValue += lettersSummary.totalWithTax;
         sections.push({
           id: section.id,
           name: section.name,
           type: "letters",
           totalCount: lettersSummary.total,
           sizeTotals: lettersSummary.sizeTotals,
+          sizeSubtotals: lettersSummary.sizeSubtotals,
+          subtotal: lettersSummary.subtotal,
+          tax: lettersSummary.tax,
+          totalWithTax: lettersSummary.totalWithTax,
           letters: lettersSummary.lines,
         });
       }
+      return;
+    }
+
+    if (section.type === "price-list") {
+      const selectedProducts = section.products
+        .map((product) => ({
+          ...product,
+          qty: getProductQty(product.id),
+        }))
+        .filter((product) => product.qty > 0);
+
+      if (selectedProducts.length === 0) return;
+
+      const quantity = selectedProducts.reduce((sum, product) => sum + product.qty, 0);
+      const subtotal = selectedProducts.reduce((sum, product) => sum + product.qty * product.unitPrice, 0);
+      const tax = subtotal * lettersConfig.taxRate;
+      const totalWithTax = subtotal + tax;
+
+      totalsByThickness[section.id] = quantity;
+      totalsByValue[section.id] = totalWithTax;
+      totalCount += quantity;
+      totalValue += totalWithTax;
+
+      sections.push({
+        id: section.id,
+        name: section.name,
+        type: "price-list",
+        totalCount: quantity,
+        subtotal,
+        tax,
+        totalWithTax,
+        products: selectedProducts.map((product) => ({
+          ...product,
+          subtotal: product.qty * product.unitPrice,
+        })),
+      });
       return;
     }
 
@@ -870,7 +1074,9 @@ function summary() {
   return {
     sections,
     totalCount,
+    totalValue,
     totalsByThickness,
+    totalsByValue,
   };
 }
 
@@ -878,13 +1084,18 @@ function renderSummary() {
   const data = summary();
 
   if (html.summaryTotals) {
-    html.summaryTotals.innerHTML = getThicknessEntries()
-      .map((meta) => {
-        const count = data.totalsByThickness[meta.id] || 0;
+    html.summaryTotals.innerHTML = getAvailableSections()
+      .map((section) => {
+        const count = data.totalsByThickness[section.id] || 0;
+        const value = data.totalsByValue[section.id] || 0;
+        const renderedValue =
+          summaryMode === "value"
+            ? formatCurrency(value)
+            : formatSectionCount(section.id, count);
         return `
           <div class="flex items-center justify-between gap-3">
-            <p class="text-sm font-bold text-slate-700">Total ${escapeHtml(meta.summaryLabel || meta.label)}:</p>
-            <p class="text-sm font-bold text-slate-700 shrink-0">${escapeHtml(formatSectionCount(meta.id, count))}</p>
+            <p class="text-sm font-bold text-slate-700">Total ${escapeHtml(section.summaryLabel || section.name || getThickness(section.id).summaryLabel || getThickness(section.id).label)}:</p>
+            <p class="text-sm font-bold text-slate-700 shrink-0">${escapeHtml(renderedValue)}</p>
           </div>
         `;
       })
@@ -911,14 +1122,30 @@ function renderSummary() {
                   ${lettersConfig.sizes
                     .map((size) => {
                       const total = section.sizeTotals[size] || 0;
+                      const subtotal = section.sizeSubtotals[size] || 0;
                       return `
                         <div class="rounded-lg bg-slate-50 px-3 py-2 text-center">
                           <p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">${escapeHtml(size)}</p>
                           <p class="mt-1 text-sm font-bold text-slate-800">${total}</p>
+                          <p class="mt-1 text-[11px] text-slate-500">${escapeHtml(formatCurrency(subtotal))}</p>
                         </div>
                       `;
                     })
                     .join("")}
+                </div>
+                <div class="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">
+                  <div class="flex items-center justify-between gap-3 text-xs">
+                    <p class="font-semibold text-slate-600">Subtotal</p>
+                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.subtotal))}</p>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 text-xs">
+                    <p class="font-semibold text-slate-600">IVA</p>
+                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.tax))}</p>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 text-sm">
+                    <p class="font-bold text-primary">Total con IVA</p>
+                    <p class="font-bold text-primary">${escapeHtml(formatCurrency(section.totalWithTax))}</p>
+                  </div>
                 </div>
                 <div class="space-y-1">
                   ${section.letters
@@ -929,7 +1156,51 @@ function renderSummary() {
                       return `
                         <div class="flex items-start justify-between gap-3 text-xs">
                           <p class="font-semibold text-slate-800">${escapeHtml(line.letter)}</p>
-                          <p class="text-slate-500 text-right">${escapeHtml(detail)}</p>
+                          <div class="text-right">
+                            <p class="text-slate-500">${escapeHtml(detail)}</p>
+                            <p class="mt-0.5 font-semibold text-slate-700">${escapeHtml(formatCurrency(line.subtotal))}</p>
+                          </div>
+                        </div>
+                      `;
+                    })
+                    .join("")}
+                </div>
+              </div>
+            </div>
+          `;
+        }
+
+        if (section.type === "price-list") {
+          return `
+            <div class="border-b border-slate-200 last:border-b-0">
+              <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeHtml(section.name)}</p>
+              </div>
+              <div class="p-4 space-y-3">
+                <div class="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-2">
+                  <div class="flex items-center justify-between gap-3 text-xs">
+                    <p class="font-semibold text-slate-600">Subtotal</p>
+                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.subtotal))}</p>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 text-xs">
+                    <p class="font-semibold text-slate-600">IVA</p>
+                    <p class="font-bold text-slate-800">${escapeHtml(formatCurrency(section.tax))}</p>
+                  </div>
+                  <div class="flex items-center justify-between gap-3 text-sm">
+                    <p class="font-bold text-primary">Total con IVA</p>
+                    <p class="font-bold text-primary">${escapeHtml(formatCurrency(section.totalWithTax))}</p>
+                  </div>
+                </div>
+                <div class="space-y-1">
+                  ${section.products
+                    .map((product) => {
+                      return `
+                        <div class="flex items-start justify-between gap-3 text-xs">
+                          <div class="min-w-0">
+                            <p class="font-semibold text-slate-800">${escapeHtml(product.name)}</p>
+                            <p class="text-slate-500">${product.qty} x ${escapeHtml(formatCurrency(product.unitPrice))}</p>
+                          </div>
+                          <p class="font-semibold text-slate-700 shrink-0">${escapeHtml(formatCurrency(product.subtotal))}</p>
                         </div>
                       `;
                     })
@@ -995,17 +1266,35 @@ function buildWhatsAppText() {
 
   data.sections.forEach((section) => {
     const sectionMeta = getThickness(section.id);
+    const sectionLabel =
+      section.type === "price-list"
+        ? section.name
+        : sectionMeta.messageLabel || sectionMeta.summaryLabel || section.name;
     lines.push("");
-    lines.push(`*${sectionMeta.messageLabel}*`);
+    lines.push(`*${sectionLabel}*`);
 
     if (section.type === "letters") {
       section.letters.forEach((line) => {
         const detail = line.perSize
           .map((item) => `${item.size}mm x${item.qty}`)
           .join(" | ");
-        lines.push(`- ${line.letter}: ${detail}`);
+        lines.push(`- ${line.letter}: ${detail} = ${formatCurrency(line.subtotal)}`);
       });
+      lines.push(`Subtotal: ${formatCurrency(section.subtotal)}`);
+      lines.push(`IVA: ${formatCurrency(section.tax)}`);
+      lines.push(`Total con IVA: ${formatCurrency(section.totalWithTax)}`);
       lines.push(`*Total ${sectionMeta.summaryLabel}: ${formatSectionCount(section.id, section.totalCount)}*`);
+      return;
+    }
+
+    if (section.type === "price-list") {
+      section.products.forEach((product) => {
+        lines.push(`- ${product.name}: ${product.qty} x ${formatCurrency(product.unitPrice)} = ${formatCurrency(product.subtotal)}`);
+      });
+      lines.push(`Subtotal: ${formatCurrency(section.subtotal)}`);
+      lines.push(`IVA: ${formatCurrency(section.tax)}`);
+      lines.push(`Total con IVA: ${formatCurrency(section.totalWithTax)}`);
+      lines.push(`*Total ${section.name}: ${formatCurrency(section.totalWithTax)}*`);
       return;
     }
 
@@ -1288,6 +1577,81 @@ async function loadCatalogFromSheet() {
     if (!cell || cell.v === null || cell.v === undefined) return "";
     return cell.v;
   };
+
+  const letterPriceRow = rows.find((row) => {
+    const firstCell = row?.c?.[0];
+    return String(firstCell?.v || "").trim() === lettersConfig.priceRowLabel;
+  });
+
+  if (letterPriceRow) {
+    lettersConfig.sizes.forEach((size, index) => {
+      const rawValue = letterPriceRow.c?.[index + 1]?.v;
+      const numeric = Number(rawValue);
+      letterState.prices[size] = Number.isFinite(numeric) ? numeric : 0;
+    });
+  }
+
+  if (clientConfig?.catalogMode === "price-list") {
+    const sections = [];
+    const fixedSections = getThicknessEntries().map((meta) => ({
+      id: meta.id,
+      name: meta.label,
+      summaryLabel: meta.summaryLabel || meta.label,
+      icon: meta.icon,
+      type: meta.type || "catalog",
+      families: [],
+      products: [],
+    }));
+
+    sections.push(...fixedSections);
+
+    const materialsMap = new Map();
+
+    rows.forEach((row, rowIndex) => {
+      const cells = row.c || [];
+      const productName = String(cells[7]?.v || "").trim();
+      const material = String(cells[8]?.v || "").trim();
+      const unitPrice = Number(cells[10]?.v);
+
+      if (!productName || !material || !Number.isFinite(unitPrice)) {
+        return;
+      }
+
+      const sectionId = `mat-${slugify(material)}`;
+      if (!materialsMap.has(sectionId)) {
+        materialsMap.set(sectionId, {
+          id: sectionId,
+          name: material,
+          summaryLabel: material,
+          icon: "inventory_2",
+          type: "price-list",
+          families: [],
+          products: [],
+        });
+      }
+
+      materialsMap.get(sectionId).products.push({
+        id: `prd-${sectionId}-${slugify(productName)}-${rowIndex}`,
+        name: productName,
+        material,
+        unitPrice,
+        sortIndex: rowIndex,
+      });
+    });
+
+    sections.push(
+      ...Array.from(materialsMap.values())
+        .map((section) => ({
+          ...section,
+          products: section.products.sort(
+            (a, b) => a.sortIndex - b.sortIndex || compareText(a.name, b.name)
+          ),
+        }))
+        .sort((a, b) => compareText(a.name, b.name))
+    );
+
+    return sections.filter((section) => section.type === "letters" || section.products.length > 0);
+  }
 
   const sectionsMap = new Map(
     getThicknessEntries().map((meta) => [
