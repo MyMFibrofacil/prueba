@@ -1,0 +1,106 @@
+<!doctype html>
+<html class="light" lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pedidos</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              primary: "#640505",
+              cream: "#f6f1eb",
+              ink: "#1f1a17",
+              sand: "#e7d7c7",
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+            },
+            boxShadow: {
+              card: "0 20px 60px rgba(31, 26, 23, 0.12)",
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      body {
+        min-height: 100dvh;
+      }
+    </style>
+  </head>
+  <body class="bg-cream font-display text-ink">
+    <main class="relative isolate min-h-screen overflow-hidden">
+      <div class="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(100,5,5,0.14),_transparent_42%),linear-gradient(135deg,_#f8f2ec_0%,_#efe4d8_100%)]"></div>
+      <div class="absolute -left-24 top-20 h-56 w-56 rounded-full bg-primary/10 blur-3xl"></div>
+      <div class="absolute bottom-0 right-0 h-72 w-72 rounded-full bg-amber-300/20 blur-3xl"></div>
+
+      <div class="relative mx-auto flex min-h-screen max-w-5xl items-center px-6 py-12">
+        <section class="grid w-full gap-8 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+          <div class="space-y-6">
+            <div class="inline-flex items-center rounded-full border border-primary/15 bg-white/80 px-4 py-2 text-sm font-semibold text-primary shadow-sm backdrop-blur">
+              Selector de pedidos
+            </div>
+            <div class="space-y-4">
+              <h1 class="max-w-xl text-4xl font-extrabold tracking-tight text-ink sm:text-5xl">
+                Elegi a que catalogo queres entrar
+              </h1>
+              <p class="max-w-lg text-base leading-7 text-slate-700 sm:text-lg">
+                Ingresa directamente a la version de <strong>Rivadavia</strong> o <strong>Moreira</strong>.
+              </p>
+            </div>
+
+            <div class="hidden items-center gap-4 sm:flex">
+              <img
+                src="./Logo.png"
+                alt="Logo"
+                class="h-14 w-14 rounded-2xl border border-white/70 bg-white/80 p-2 shadow-card"
+              />
+              <p class="text-sm font-medium text-slate-600">
+                Acceso principal para abrir cada indice por separado.
+              </p>
+            </div>
+          </div>
+
+          <div class="rounded-[2rem] border border-white/70 bg-white/85 p-5 shadow-card backdrop-blur">
+            <div class="space-y-3">
+              <a
+                href="./rivadavia/index.html"
+                class="group block rounded-[1.5rem] border border-primary/15 bg-[linear-gradient(135deg,_#fff_0%,_#f8efef_100%)] px-5 py-5 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg"
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary/70">Cliente</p>
+                    <h2 class="mt-1 text-2xl font-extrabold text-ink">Rivadavia</h2>
+                    <p class="mt-2 text-sm text-slate-600">Abrir catalogo de pedidos de Rivadavia.</p>
+                  </div>
+                  <span class="text-2xl text-primary transition group-hover:translate-x-1">&rarr;</span>
+                </div>
+              </a>
+
+              <a
+                href="./moreira/index.html"
+                class="group block rounded-[1.5rem] border border-slate-200 bg-[linear-gradient(135deg,_#fff_0%,_#f4efe8_100%)] px-5 py-5 transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-lg"
+              >
+                <div class="flex items-center justify-between gap-4">
+                  <div>
+                    <p class="text-xs font-bold uppercase tracking-[0.2em] text-primary/70">Cliente</p>
+                    <h2 class="mt-1 text-2xl font-extrabold text-ink">Moreira</h2>
+                    <p class="mt-2 text-sm text-slate-600">Abrir catalogo de letras y numeros de Moreira.</p>
+                  </div>
+                  <span class="text-2xl text-primary transition group-hover:translate-x-1">&rarr;</span>
+                </div>
+              </a>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+  </body>
+</html>
