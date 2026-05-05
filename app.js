@@ -70,7 +70,9 @@ const summaryMode = clientConfig?.summaryMode || "count";
 
 let catalog = [];
 const familyQuantities = {};
+const materialQuantities = {};
 const productQuantities = {};
+const kitGroupOpenState = {};
 let activeThickness = Object.keys(thicknessMeta)[0] || "3";
 let searchTerm = "";
 let summaryOpen = false;
@@ -101,6 +103,9 @@ const html = {
   toast: document.getElementById("status-toast"),
   emailForm: document.getElementById("email-send-form"),
   emailFrame: document.getElementById("email-send-target"),
+  openDesigns: document.getElementById("open-designs"),
+  closeDesigns: document.getElementById("close-designs"),
+  designsModal: document.getElementById("designs-modal"),
 };
 
 const lettersConfig = {
@@ -205,9 +210,14 @@ function isPriceListSection(id) {
   return getSectionType(id) === "price-list";
 }
 
+function isKitSection(id) {
+  return getSectionType(id) === "kits";
+}
+
 function getSectionUnitLabel(sectionId, count = 0) {
   const base = getThickness(sectionId).summaryUnit || "placas";
   if (base === "letras") return count === 1 ? "letra" : "letras";
+  if (base === "items") return count === 1 ? "item" : "items";
   return count === 1 ? "placa" : "placas";
 }
 
@@ -222,6 +232,11 @@ function formatCurrency(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
+}
+
+function normalizePrice(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
 }
 
 function applyClientUi() {
@@ -254,6 +269,18 @@ function updateSearchVisibility() {
 
 function setFamiliesMessage(message) {
   html.families.innerHTML = `<p class="text-sm text-slate-500">${escapeHtml(message)}</p>`;
+}
+
+function openDesignsModal() {
+  if (!html.designsModal) return;
+  html.designsModal.classList.remove("hidden");
+  document.body.classList.add("overflow-hidden");
+}
+
+function closeDesignsModal() {
+  if (!html.designsModal) return;
+  html.designsModal.classList.add("hidden");
+  document.body.classList.remove("overflow-hidden");
 }
 
 function hideToast() {
@@ -376,6 +403,10 @@ function getProductQty(productId) {
   return productQuantities[productId] || 0;
 }
 
+function getMaterialQty(materialId) {
+  return materialQuantities[materialId] || 0;
+}
+
 function setFamilyQty(familyId, value) {
   const next = normalizeQty(value);
   if (next === 0) {
@@ -402,6 +433,20 @@ function setProductQty(productId, value) {
 
 function updateProductQty(productId, delta) {
   setProductQty(productId, getProductQty(productId) + delta);
+}
+
+function setMaterialQty(materialId, value) {
+  const next = normalizeQty(value);
+  if (next === 0) {
+    delete materialQuantities[materialId];
+  } else {
+    materialQuantities[materialId] = next;
+  }
+  render();
+}
+
+function updateMaterialQty(materialId, delta) {
+  setMaterialQty(materialId, getMaterialQty(materialId) + delta);
 }
 
 function getLetterTotal(letter) {
@@ -504,6 +549,21 @@ function clearActiveSection() {
     return;
   }
 
+  if (section.type === "kits") {
+    section.families.forEach((family) => {
+      delete familyQuantities[family.id];
+      family.materialGroups?.forEach((group) => {
+        delete materialQuantities[group.id];
+      });
+      family.products.forEach((product) => {
+        delete productQuantities[product.id];
+      });
+    });
+    setStatus(`Se limpio la categoria ${section.name}.`, "success");
+    render();
+    return;
+  }
+
   section.families.forEach((family) => {
     delete familyQuantities[family.id];
     family.products.forEach((product) => {
@@ -517,6 +577,10 @@ function clearActiveSection() {
 function clearCurrentOrder() {
   Object.keys(familyQuantities).forEach((key) => {
     delete familyQuantities[key];
+  });
+
+  Object.keys(materialQuantities).forEach((key) => {
+    delete materialQuantities[key];
   });
 
   Object.keys(productQuantities).forEach((key) => {
@@ -611,6 +675,11 @@ function toggleFamily(familyId) {
   renderFamilies();
 }
 
+function toggleKitGroup(groupId) {
+  kitGroupOpenState[groupId] = !kitGroupOpenState[groupId];
+  renderFamilies();
+}
+
 function renderTabs() {
   html.tabs.innerHTML = getAvailableSections()
     .map((section) => {
@@ -634,14 +703,25 @@ function searchMatchesFamily(family) {
   if (!searchTerm) return true;
   const term = searchTerm.toLowerCase();
   if (family.name.toLowerCase().includes(term)) return true;
-  return family.products.some((product) => product.name.toLowerCase().includes(term));
+  return family.products.some((product) => {
+    return (
+      product.name.toLowerCase().includes(term) ||
+      String(product.material || "").toLowerCase().includes(term) ||
+      String(product.object || "").toLowerCase().includes(term)
+    );
+  });
 }
 
 function filteredProductsForFamily(family) {
   if (!searchTerm) return family.products;
   const term = searchTerm.toLowerCase();
   return family.products.filter((product) => {
-    return family.name.toLowerCase().includes(term) || product.name.toLowerCase().includes(term);
+    return (
+      family.name.toLowerCase().includes(term) ||
+      product.name.toLowerCase().includes(term) ||
+      String(product.material || "").toLowerCase().includes(term) ||
+      String(product.object || "").toLowerCase().includes(term)
+    );
   });
 }
 
@@ -721,9 +801,261 @@ function renderIndividualProductRow(product) {
   `;
 }
 
+function renderValueProductRow(product, metaLabel = "", displayName = "") {
+  const qty = getProductQty(product.id);
+  const subtotal = qty * normalizePrice(product.unitPrice);
+  const title = displayName || product.name;
+
+  return `
+    <div class="p-4 flex items-start justify-between gap-3">
+      <div class="min-w-0 flex-1">
+        <p class="text-sm font-semibold text-slate-800 break-words">${escapeHtml(title)}</p>
+        ${
+          metaLabel
+            ? `<p class="mt-1 text-xs text-slate-500">${escapeHtml(metaLabel)}</p>`
+            : ""
+        }
+        <p class="mt-1 text-xs text-slate-500">${escapeHtml(formatCurrency(product.unitPrice))}</p>
+        ${
+          subtotal > 0
+            ? `<p class="mt-1 text-xs font-semibold text-primary">${escapeHtml(formatCurrency(subtotal))}</p>`
+            : ""
+        }
+      </div>
+      <div class="flex shrink-0 items-center bg-slate-100 rounded-lg p-1">
+        <button
+          data-product-action="minus"
+          data-product="${escapeHtml(product.id)}"
+          class="size-8 flex items-center justify-center rounded-md bg-white shadow-sm text-primary"
+          type="button"
+        >
+          <span class="material-symbols-outlined text-lg">remove</span>
+        </button>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          inputmode="numeric"
+          value="${qty}"
+          data-product-input="${escapeHtml(product.id)}"
+          class="w-12 h-8 text-center font-bold text-sm border-0 bg-transparent focus:ring-0 px-1"
+        />
+        <button
+          data-product-action="plus"
+          data-product="${escapeHtml(product.id)}"
+          class="size-8 flex items-center justify-center rounded-md ${
+            qty > 0 ? "bg-primary text-white" : "bg-white text-primary"
+          } shadow-sm"
+          type="button"
+        >
+          <span class="material-symbols-outlined text-lg">add</span>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function renderKitGroupCard(
+  family,
+  title,
+  items,
+  field,
+  groupLabel,
+  contentRenderer = null,
+  headerControls = "",
+  priceLabel = ""
+) {
+  const groupId = `kit-group-${field}-${family.id}-${slugify(groupLabel)}`;
+  const isOpen = searchTerm ? true : Boolean(kitGroupOpenState[groupId]);
+  const detailLabel =
+    field === "material"
+      ? `${items.length} ${items.length === 1 ? "pieza" : "piezas"}`
+      : `${items.length} ${items.length === 1 ? "opcion" : "opciones"}`;
+
+  return `
+    <section class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+      <div class="px-4 py-3 flex items-center justify-between gap-3 bg-slate-50">
+        <button
+          type="button"
+          data-kit-group-toggle="${escapeHtml(groupId)}"
+          class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
+        >
+          <div class="min-w-0">
+            <div class="flex items-center gap-2 flex-wrap">
+              <p class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeHtml(title)}</p>
+              ${
+                priceLabel
+                  ? `<p class="text-xs text-slate-500">${escapeHtml(priceLabel)}</p>`
+                  : ""
+              }
+            </div>
+            <p class="text-xs text-slate-500 mt-1">${escapeHtml(detailLabel)}</p>
+          </div>
+          <span class="material-symbols-outlined text-slate-500 shrink-0">${isOpen ? "expand_less" : "expand_more"}</span>
+        </button>
+        ${
+          headerControls
+            ? `<div class="shrink-0">${headerControls}</div>`
+            : ""
+        }
+      </div>
+      ${
+        isOpen
+          ? `<div class="divide-y divide-slate-100">
+              ${items
+                .map((item) => {
+                  if (contentRenderer) return contentRenderer(item);
+                  const metaLabel = field === "material" ? item.object : item.material;
+                  return renderValueProductRow(item, metaLabel);
+                })
+                .join("")}
+            </div>`
+          : ""
+      }
+    </section>
+  `;
+}
+
+function groupProductsBy(products, key) {
+  const groups = new Map();
+  products.forEach((product) => {
+    const value = String(product[key] || "").trim();
+    if (!value) return;
+    if (!groups.has(value)) groups.set(value, []);
+    groups.get(value).push(product);
+  });
+  return Array.from(groups.entries())
+    .sort((a, b) => compareText(a[0], b[0]))
+    .map(([label, items]) => ({ label, items }));
+}
+
+function renderKitFamilyDetails(family, products) {
+  const productIds = new Set(products.map((product) => product.id));
+  const visibleMaterialGroups = (family.materialGroups || []).filter((group) =>
+    group.products.some((product) => productIds.has(product.id))
+  );
+
+  return `
+    <div class="px-4 pb-4 space-y-3">
+      ${visibleMaterialGroups
+        .map((group) => {
+          const materialQty = getMaterialQty(group.id);
+          const controls = `
+            <div class="flex shrink-0 items-center bg-slate-100 rounded-lg p-1">
+              <button
+                data-material-action="minus"
+                data-material="${escapeHtml(group.id)}"
+                class="size-8 flex items-center justify-center rounded-md bg-white shadow-sm text-primary"
+                type="button"
+              >
+                <span class="material-symbols-outlined text-lg">remove</span>
+              </button>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                inputmode="numeric"
+                value="${materialQty}"
+                data-material-input="${escapeHtml(group.id)}"
+                class="w-12 h-8 text-center font-bold text-sm border-0 bg-transparent focus:ring-0 px-1"
+              />
+              <button
+                data-material-action="plus"
+                data-material="${escapeHtml(group.id)}"
+                class="size-8 flex items-center justify-center rounded-md ${
+                  materialQty > 0 ? "bg-primary text-white" : "bg-white text-primary"
+                } shadow-sm"
+                type="button"
+              >
+                <span class="material-symbols-outlined text-lg">add</span>
+              </button>
+            </div>
+          `;
+
+          return renderKitGroupCard(family, group.name, group.products, "material", group.name, (product) =>
+            renderValueProductRow(product, "", product.object), controls, formatCurrency(group.basePrice)
+          );
+        })
+        .join("")}
+    </div>
+  `;
+}
+
 function renderFamilyCard(family) {
   const filteredProducts = filteredProductsForFamily(family);
   if (searchTerm && filteredProducts.length === 0 && !searchMatchesFamily(family)) return "";
+
+  if (family.type === "kit") {
+    const isOpen = searchTerm ? true : family.open;
+    const products = searchTerm ? filteredProducts : family.products;
+    const familyQty = getFamilyQty(family.id);
+    const materialsValue = (family.materialGroups || []).reduce(
+      (sum, group) => sum + getMaterialQty(group.id) * group.basePrice,
+      0
+    );
+    const extrasValue = family.products.reduce(
+      (sum, product) => sum + getProductQty(product.id) * normalizePrice(product.unitPrice),
+      0
+    );
+    const totalValue = familyQty * family.basePrice + materialsValue + extrasValue;
+
+    return `
+      <section class="rounded-xl overflow-hidden border border-slate-200 bg-white">
+        <div class="p-4 flex items-start gap-3">
+          <button
+            data-family="${escapeHtml(family.id)}"
+            class="flex-1 min-w-0 flex items-start gap-3 text-left"
+            type="button"
+          >
+            <span class="material-symbols-outlined text-primary mt-0.5">${isOpen ? "folder_open" : "folder"}</span>
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 flex-wrap">
+                <p class="font-bold text-slate-800">${escapeHtml(family.name)}</p>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">
+                ${family.products.length} piezas · ${escapeHtml(formatCurrency(family.basePrice))} el kit
+              </p>
+              ${
+                totalValue > 0
+                  ? `<p class="text-xs text-primary font-semibold mt-1">Pedido actual: ${escapeHtml(formatCurrency(totalValue))}</p>`
+                  : ""
+              }
+            </div>
+          </button>
+          <div class="flex shrink-0 items-center bg-slate-100 rounded-lg p-1">
+            <button
+              data-family-action="minus"
+              data-family-qty="${escapeHtml(family.id)}"
+              class="size-8 flex items-center justify-center rounded-md bg-white shadow-sm text-primary"
+              type="button"
+            >
+              <span class="material-symbols-outlined text-lg">remove</span>
+            </button>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputmode="numeric"
+              value="${familyQty}"
+              data-family-input="${escapeHtml(family.id)}"
+              class="w-12 h-8 text-center font-bold text-sm border-0 bg-transparent focus:ring-0 px-1"
+            />
+            <button
+              data-family-action="plus"
+              data-family-qty="${escapeHtml(family.id)}"
+              class="size-8 flex items-center justify-center rounded-md ${
+                familyQty > 0 ? "bg-primary text-white" : "bg-white text-primary"
+              } shadow-sm"
+              type="button"
+            >
+              <span class="material-symbols-outlined text-lg">add</span>
+            </button>
+          </div>
+        </div>
+        ${isOpen ? renderKitFamilyDetails(family, products) : ""}
+      </section>
+    `;
+  }
 
   const products = family.type === "grupo" && searchTerm ? family.products : filteredProducts;
   const isOpen = searchTerm ? true : family.open;
@@ -994,54 +1326,7 @@ function renderPriceListSection(section) {
         </button>
       </div>
       <div class="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden bg-white">
-        ${filteredProducts
-          .map((product) => {
-            const qty = getProductQty(product.id);
-            const subtotal = qty * product.unitPrice;
-            return `
-              <div class="p-4 flex items-start justify-between gap-3">
-                <div class="min-w-0 flex-1">
-                  <p class="text-sm font-semibold text-slate-800 break-words">${escapeHtml(product.name)}</p>
-                  <p class="mt-1 text-xs text-slate-500">${escapeHtml(formatCurrency(product.unitPrice))}</p>
-                  ${
-                    subtotal > 0
-                      ? `<p class="mt-1 text-xs font-semibold text-primary">${escapeHtml(formatCurrency(subtotal))}</p>`
-                      : ""
-                  }
-                </div>
-                <div class="flex shrink-0 items-center bg-slate-100 rounded-lg p-1">
-                  <button
-                    data-product-action="minus"
-                    data-product="${escapeHtml(product.id)}"
-                    class="size-8 flex items-center justify-center rounded-md bg-white shadow-sm text-primary"
-                    type="button"
-                  >
-                    <span class="material-symbols-outlined text-lg">remove</span>
-                  </button>
-                  <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    inputmode="numeric"
-                    value="${qty}"
-                    data-product-input="${escapeHtml(product.id)}"
-                    class="w-12 h-8 text-center font-bold text-sm border-0 bg-transparent focus:ring-0 px-1"
-                  />
-                  <button
-                    data-product-action="plus"
-                    data-product="${escapeHtml(product.id)}"
-                    class="size-8 flex items-center justify-center rounded-md ${
-                      qty > 0 ? "bg-primary text-white" : "bg-white text-primary"
-                    } shadow-sm"
-                    type="button"
-                  >
-                    <span class="material-symbols-outlined text-lg">add</span>
-                  </button>
-                </div>
-              </div>
-            `;
-          })
-          .join("")}
+        ${filteredProducts.map((product) => renderValueProductRow(product)).join("")}
       </div>
     </section>
   `;
@@ -1063,6 +1348,38 @@ function renderFamilies() {
 
   if (section.type === "price-list") {
     renderPriceListSection(section);
+    return;
+  }
+
+  if (section.type === "kits") {
+    const cards = section.families.map(renderFamilyCard).filter(Boolean).join("");
+    html.families.innerHTML = cards
+      ? `
+        <section class="space-y-3">
+          <div class="rounded-2xl border border-slate-200 bg-white p-3 space-y-3">
+            <div class="flex items-center justify-between gap-3">
+              <div>
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Categoria</p>
+                <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(section.name)}</p>
+              </div>
+              <p class="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
+                Paso ${escapeHtml(letterState.step)}
+              </p>
+            </div>
+            <div class="flex gap-2 overflow-x-auto scrollbar-hide">${renderQuickStepButtons()}</div>
+            <button
+              type="button"
+              data-category-clear="active"
+              class="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700"
+            >
+              Limpiar categoria
+            </button>
+          </div>
+          <div class="space-y-3">${cards}</div>
+        </section>
+      `
+      : "";
+    html.empty.classList.toggle("hidden", Boolean(cards));
     return;
   }
 
@@ -1102,6 +1419,91 @@ function summary() {
           tax: lettersSummary.tax,
           totalWithTax: lettersSummary.totalWithTax,
           letters: lettersSummary.lines,
+        });
+      }
+      return;
+    }
+
+    if (section.type === "kits") {
+      const families = [];
+      let sectionQuantity = 0;
+      let sectionValue = 0;
+
+      section.families.forEach((family) => {
+        const fullKitQty = getFamilyQty(family.id);
+        const selectedMaterials = (family.materialGroups || [])
+          .map((group) => ({
+            ...group,
+            qty: getMaterialQty(group.id),
+          }))
+          .filter((group) => group.qty > 0);
+        const selectedProducts = family.products
+          .map((product) => ({
+            ...product,
+            qty: getProductQty(product.id),
+          }))
+          .filter((product) => product.qty > 0);
+
+        if (fullKitQty <= 0 && selectedMaterials.length === 0 && selectedProducts.length === 0) return;
+
+        const breakdown = [];
+        if (fullKitQty > 0) {
+          breakdown.push({
+            kind: "full-kit",
+            name: "Kit completo",
+            qty: fullKitQty,
+            subtotal: fullKitQty * family.basePrice,
+          });
+        }
+
+        selectedMaterials.forEach((group) => {
+          breakdown.push({
+            kind: "material",
+            name: group.name,
+            qty: group.qty,
+            subtotal: group.qty * group.basePrice,
+          });
+        });
+
+        selectedProducts.forEach((product) => {
+          breakdown.push({
+            kind: "piece",
+            name: `${product.material} - ${product.object}`,
+            qty: product.qty,
+            subtotal: product.qty * product.unitPrice,
+          });
+        });
+
+        const familyQuantity =
+          fullKitQty +
+          selectedMaterials.reduce((sum, group) => sum + group.qty, 0) +
+          selectedProducts.reduce((sum, product) => sum + product.qty, 0);
+        const familyValue = breakdown.reduce((sum, item) => sum + item.subtotal, 0);
+
+        sectionQuantity += familyQuantity;
+        sectionValue += familyValue;
+        totalCount += familyQuantity;
+        totalValue += familyValue;
+
+        families.push({
+          type: "kit",
+          name: family.name,
+          totalCount: familyQuantity,
+          totalValue: familyValue,
+          breakdown,
+        });
+      });
+
+      if (families.length > 0) {
+        totalsByThickness[section.id] = sectionQuantity;
+        totalsByValue[section.id] = sectionValue;
+        sections.push({
+          id: section.id,
+          name: section.name,
+          type: "kits",
+          totalCount: sectionQuantity,
+          subtotal: sectionValue,
+          families,
         });
       }
       return;
@@ -1336,6 +1738,42 @@ function renderSummary() {
           `;
         }
 
+        if (section.type === "kits") {
+          return `
+            <div class="border-b border-slate-200 last:border-b-0">
+              <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                <p class="text-xs font-bold uppercase tracking-wide text-slate-500">${escapeHtml(section.name)}</p>
+              </div>
+              <div class="divide-y divide-slate-100">
+                ${section.families
+                  .map((family) => {
+                    return `
+                      <div class="p-4 space-y-2">
+                        <div class="flex items-start justify-between gap-3">
+                          <p class="text-sm font-semibold text-slate-800">${escapeHtml(family.name)}</p>
+                          <p class="text-sm font-bold text-primary shrink-0">${escapeHtml(formatCurrency(family.totalValue))}</p>
+                        </div>
+                        <div class="space-y-1">
+                          ${family.breakdown
+                            .map((item) => {
+                              return `
+                                <div class="flex items-start justify-between gap-3 text-xs">
+                                  <p class="text-slate-500 min-w-0">${escapeHtml(`${item.name} x${item.qty}`)}</p>
+                                  <p class="text-slate-700 shrink-0">${escapeHtml(formatCurrency(item.subtotal))}</p>
+                                </div>
+                              `;
+                            })
+                            .join("")}
+                        </div>
+                      </div>
+                    `;
+                  })
+                  .join("")}
+              </div>
+            </div>
+          `;
+        }
+
         return `
           <div class="border-b border-slate-200 last:border-b-0">
             <div class="px-4 py-3 bg-slate-50 border-b border-slate-200">
@@ -1435,6 +1873,20 @@ function buildWhatsAppText() {
         group.items.forEach((item) => {
           lines.push(`- ${item.letter}: ${item.qty}`);
         });
+      });
+      return;
+    }
+
+    if (section.type === "kits") {
+      section.families.forEach((family, index) => {
+        lines.push(`${family.name}`);
+        family.breakdown.forEach((item) => {
+          lines.push(`- ${item.name}: ${item.qty}`);
+        });
+
+        if (index < section.families.length - 1) {
+          lines.push("");
+        }
       });
       return;
     }
@@ -1683,10 +2135,23 @@ function bindEvents() {
       return;
     }
 
+    const kitGroupButton = event.target.closest("[data-kit-group-toggle]");
+    if (kitGroupButton) {
+      toggleKitGroup(kitGroupButton.dataset.kitGroupToggle);
+      return;
+    }
+
     const familyQtyButton = event.target.closest("[data-family-action][data-family-qty]");
     if (familyQtyButton) {
       const delta = familyQtyButton.dataset.familyAction === "plus" ? letterState.step : -letterState.step;
       updateFamilyQty(familyQtyButton.dataset.familyQty, delta);
+      return;
+    }
+
+    const materialQtyButton = event.target.closest("[data-material-action][data-material]");
+    if (materialQtyButton) {
+      const delta = materialQtyButton.dataset.materialAction === "plus" ? letterState.step : -letterState.step;
+      updateMaterialQty(materialQtyButton.dataset.material, delta);
       return;
     }
 
@@ -1738,6 +2203,12 @@ function bindEvents() {
       return;
     }
 
+    const materialInput = event.target.closest("[data-material-input]");
+    if (materialInput) {
+      setMaterialQty(materialInput.dataset.materialInput, materialInput.value);
+      return;
+    }
+
     const letterInput = event.target.closest("[data-letter-input][data-letter-size]");
     if (letterInput) {
       setLetterQty(letterInput.dataset.letterInput, letterInput.dataset.letterSize, letterInput.value);
@@ -1765,6 +2236,28 @@ function bindEvents() {
       pendingEmailStatusMessage = "";
     });
   }
+
+  if (html.openDesigns) {
+    html.openDesigns.addEventListener("click", openDesignsModal);
+  }
+
+  if (html.closeDesigns) {
+    html.closeDesigns.addEventListener("click", closeDesignsModal);
+  }
+
+  if (html.designsModal) {
+    html.designsModal.addEventListener("click", (event) => {
+      if (event.target === html.designsModal) {
+        closeDesignsModal();
+      }
+    });
+  }
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && html.designsModal && !html.designsModal.classList.contains("hidden")) {
+      closeDesignsModal();
+    }
+  });
 
   if (html.scrollToBottom && html.catalogScroll) {
     html.scrollToBottom.addEventListener("click", () => {
@@ -1796,19 +2289,20 @@ async function loadCatalogFromSheet() {
     throw new Error("Cliente no configurado");
   }
 
-  let data = { table: { cols: [], rows: [] } };
   const hasSheet = Boolean(clientConfig.sheetId) && clientConfig.sheetGid !== undefined;
 
-  if (hasSheet) {
-    const url = `https://docs.google.com/spreadsheets/d/${clientConfig.sheetId}/gviz/tq?tqx=out:json&gid=${clientConfig.sheetGid}`;
+  const parseSheetResponseText = (rawText) => {
+    const match = rawText.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
+    if (!match) {
+      throw new Error("Formato de respuesta de Google Sheets no reconocido");
+    }
+    return JSON.parse(match[1]);
+  };
 
-    const parseSheetResponseText = (rawText) => {
-      const match = rawText.match(/google\.visualization\.Query\.setResponse\((.*)\);?\s*$/s);
-      if (!match) {
-        throw new Error("Formato de respuesta de Google Sheets no reconocido");
-      }
-      return JSON.parse(match[1]);
-    };
+  const loadSheetData = async (gid) => {
+    if (!hasSheet) return { table: { cols: [], rows: [] } };
+
+    const url = `https://docs.google.com/spreadsheets/d/${clientConfig.sheetId}/gviz/tq?tqx=out:json&gid=${gid}`;
 
     const loadWithFetch = async () => {
       const response = await fetch(url);
@@ -1864,12 +2358,122 @@ async function loadCatalogFromSheet() {
       });
 
     try {
-      data = await loadWithFetch();
+      return await loadWithFetch();
     } catch (_error) {
-      data = await loadWithScript();
+      return loadWithScript();
     }
+  };
+
+  if (clientConfig?.catalogMode === "moreira-categories") {
+    const categoriesData = await loadSheetData(clientConfig.catalogSheetGid || clientConfig.sheetGid);
+    const rows = categoriesData?.table?.rows || [];
+
+    const letterPriceRow = rows.find((row) => String(row?.c?.[11]?.v || "").trim() === lettersConfig.priceRowLabel);
+    if (letterPriceRow) {
+      lettersConfig.sizes.forEach((size, index) => {
+        const rawValue = letterPriceRow.c?.[index + 12]?.v;
+        letterState.prices[size] = normalizePrice(rawValue);
+      });
+    }
+
+    const kitsMap = new Map();
+    const individuals = [];
+
+    rows.forEach((row, rowIndex) => {
+      const cells = row.c || [];
+
+      const kitFullName = String(cells[0]?.v || "").trim();
+      const kitName = String(cells[1]?.v || "").trim();
+      const kitMaterial = String(cells[2]?.v || "").trim();
+      const kitObject = String(cells[3]?.v || "").trim();
+      const kitPrice = Number(cells[4]?.v);
+
+      if (kitFullName && kitName && kitMaterial && kitObject && Number.isFinite(kitPrice)) {
+        const familyId = `kit-${slugify(kitName)}`;
+        if (!kitsMap.has(familyId)) {
+          kitsMap.set(familyId, {
+            id: familyId,
+            name: kitName,
+            type: "kit",
+            open: false,
+            products: [],
+            materialGroups: [],
+            sortIndex: rowIndex,
+            basePrice: 0,
+          });
+        }
+
+        const family = kitsMap.get(familyId);
+        family.products.push({
+          id: `prd-${familyId}-${slugify(kitFullName)}-${rowIndex}`,
+          name: kitFullName,
+          material: kitMaterial,
+          object: kitObject,
+          unitPrice: kitPrice,
+          sortIndex: rowIndex,
+        });
+        family.basePrice += kitPrice;
+      }
+
+      const individualFullName = String(cells[6]?.v || "").trim();
+      const individualObject = String(cells[7]?.v || "").trim();
+      const individualMaterial = String(cells[8]?.v || "").trim();
+      const individualPrice = Number(cells[9]?.v);
+
+      if (individualFullName && individualMaterial && Number.isFinite(individualPrice)) {
+        individuals.push({
+          id: `prd-individual-${slugify(individualFullName)}-${rowIndex}`,
+          name: individualFullName,
+          object: individualObject,
+          material: individualMaterial,
+          unitPrice: individualPrice,
+          sortIndex: rowIndex,
+        });
+      }
+    });
+
+    return [
+      {
+        id: "kits",
+        name: "Kits",
+        summaryLabel: "Kits",
+        icon: "deployed_code",
+        type: "kits",
+        families: Array.from(kitsMap.values())
+          .map((family) => ({
+            ...family,
+            products: family.products.sort((a, b) => a.sortIndex - b.sortIndex || compareText(a.name, b.name)),
+            materialGroups: groupProductsBy(family.products, "material").map((group) => ({
+              id: `mat-${family.id}-${slugify(group.label)}`,
+              name: group.label,
+              basePrice: group.items.reduce((sum, item) => sum + item.unitPrice, 0),
+              products: group.items.sort((a, b) => a.sortIndex - b.sortIndex || compareText(a.name, b.name)),
+            })),
+          }))
+          .sort((a, b) => a.sortIndex - b.sortIndex || compareText(a.name, b.name)),
+      },
+      {
+        id: "individuales",
+        name: "Individuales",
+        summaryLabel: "Individuales",
+        icon: "inventory_2",
+        type: "price-list",
+        families: [],
+        products: individuals.sort((a, b) => a.sortIndex - b.sortIndex || compareText(a.name, b.name)),
+      },
+      {
+        id: "letras",
+        name: "Letras",
+        summaryLabel: "Letras",
+        icon: "title",
+        type: "letters",
+        families: [],
+        products: [],
+      },
+    ].filter((section) => section.type === "letters" || section.families?.length > 0 || section.products?.length > 0);
   }
 
+  const data = await loadSheetData(clientConfig.sheetGid);
   const cols = data?.table?.cols || [];
   const rows = data?.table?.rows || [];
   const indexes = Object.fromEntries(cols.map((col, index) => [col.label, index]));
