@@ -1,6 +1,6 @@
 # Pedidos Valeria Lotz
 
-Esta carpeta contiene la entrada directa de la app de pedidos de Valeria Lotz.
+Esta carpeta contiene la entrada directa de la app de pedidos de Valeria Lotz. Incluye su propio `app.js` de inicio para que pueda publicarse en el repositorio actual, que mantiene el controlador compartido como `controller.js` en la raíz.
 
 ## Catalogo
 
