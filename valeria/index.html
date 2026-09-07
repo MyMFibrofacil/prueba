@@ -8,7 +8,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet" />
     <script>
-      tailwind.config = { theme: { extend: { colors: { primary: "#640505", "background-light": "#f8f5f5", whatsapp: "#25D366" }, fontFamily: { display: "Inter" } } } };
+      tailwind.config = { theme: { extend: { colors: { primary: "#640505", "background-light": "#f8f5f5", mail: "#2563eb" }, fontFamily: { display: "Inter" } } } };
     </script>
     <style>
       body { min-height: max(884px, 100dvh); }
@@ -20,6 +20,16 @@
     <script>window.APP_CLIENT_KEY = "valeria"; window.APP_ASSET_PREFIX = "../";</script>
   </head>
   <body class="bg-background-light font-display text-slate-900 min-h-screen flex flex-col">
+    <iframe id="email-send-target" name="email-send-target" class="hidden" tabindex="-1" aria-hidden="true"></iframe>
+    <form id="email-send-form" method="POST" target="email-send-target" class="hidden">
+      <input type="hidden" name="from" value="" />
+      <input type="hidden" name="to" value="" />
+      <input type="hidden" name="subject" value="" />
+      <textarea name="body" class="hidden"></textarea>
+      <input type="hidden" name="client_key" value="" />
+      <input type="hidden" name="client_name" value="" />
+      <input type="hidden" name="created_at" value="" />
+    </form>
     <header class="sticky top-0 z-50 bg-white border-b border-primary/10 shadow-sm relative">
       <img id="app-logo" src="" alt="Logo" class="absolute top-2 right-3 w-8 h-8 object-contain opacity-70" onerror="this.style.display='none'" />
       <div id="thickness-tabs" class="flex overflow-x-auto border-b border-slate-200 px-4 scrollbar-hide"></div>
@@ -40,7 +50,7 @@
       <div id="summary-details-panel" class="absolute bottom-[calc(100%+8px)] left-4 right-4 hidden rounded-xl border border-slate-200 bg-white shadow-xl"><div class="border-b border-slate-200 px-4 py-3"><p id="summary-title" class="text-sm font-bold">Detalle del pedido</p></div><div id="summary-details-list" class="max-h-72 overflow-y-auto"></div></div>
       <button id="summary-toggle" class="flex w-full items-center justify-between rounded-lg px-2 py-2" type="button"><div id="summary-totals" class="min-w-0 flex-1 space-y-1"></div><span id="summary-chevron" class="material-symbols-outlined ml-3 text-slate-500">expand_less</span></button>
       <p id="status-message" class="min-h-4 px-2 text-xs text-slate-500"></p>
-      <button id="send-whatsapp" class="flex w-full items-center justify-center gap-2 rounded-xl bg-whatsapp py-4 font-bold text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50"><span class="material-symbols-outlined">send</span><span id="send-button-label">Copiar Pedido y Abrir WhatsApp</span></button>
+      <button id="send-whatsapp" class="flex w-full items-center justify-center gap-2 rounded-xl bg-mail py-4 font-bold text-white shadow-lg disabled:cursor-not-allowed disabled:opacity-50"><span class="material-symbols-outlined">mail</span><span id="send-button-label">Enviar Pedido por Mail</span></button>
     </div>
     <script src="../clients.js"></script>
     <script src="../controller.js"></script>

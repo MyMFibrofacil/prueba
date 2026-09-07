@@ -16,7 +16,7 @@ La app crea una pestaña por `Sección` y una card desplegable por `Categoría`.
 
 ## Envio
 
-Actualmente el pedido se copia al portapapeles y abre WhatsApp para que el cliente elija el destinatario. Para cambiarlo a envio por correo, completar `emailTo` y `sendEndpoint` en `../clients.js` y reutilizar o crear un Apps Script de correo.
+El pedido se envía por correo a `mymfibrofacil@gmail.com` mediante el mismo Apps Script de Moreira. El asunto se genera como `Valeria Lotz - dd/mm/aaaa` y el pedido también se copia al portapapeles.
 
 ## Acceso a la hoja
 
