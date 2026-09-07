@@ -122,6 +122,7 @@ window.PEDIDOS_CLIENTS = {
     catalogSheetGid: "991234567",
     catalogMode: "categorized-price-list",
     summaryMode: "value",
+    hideEmptySummarySections: true,
     sendMode: "whatsapp",
     logoPath: "Logo.png",
     ui: {

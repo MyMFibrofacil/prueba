@@ -1890,7 +1890,14 @@ function renderSummary() {
   const data = summary();
 
   if (html.summaryTotals) {
-    const totalsMarkup = getAvailableSections()
+    const summarySections = getAvailableSections().filter((section) => {
+      if (!clientConfig?.hideEmptySummarySections) return true;
+      const value = data.totalsByValue[section.id] || 0;
+      const count = data.totalsByThickness[section.id] || 0;
+      return summaryMode === "value" ? value > 0 : count > 0;
+    });
+
+    const totalsMarkup = summarySections
       .map((section) => {
         const count = data.totalsByThickness[section.id] || 0;
         const value = data.totalsByValue[section.id] || 0;
