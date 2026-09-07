@@ -114,4 +114,22 @@ window.PEDIDOS_CLIENTS = {
       ],
     },
   },
+  valeria: {
+    key: "valeria",
+    name: "Valeria Lotz",
+    sheetId: "1uT9zGZI_SkTyESlOqaIl1iLpCcxYz4RnB2mTwBQ42Z4",
+    sheetGid: "991234567",
+    catalogSheetGid: "991234567",
+    catalogMode: "categorized-price-list",
+    summaryMode: "value",
+    sendMode: "whatsapp",
+    logoPath: "Logo.png",
+    ui: {
+      title: "Pedidos Valeria Lotz",
+      searchPlaceholder: "Buscar productos o categorías...",
+      sendButtonLabel: "Copiar Pedido y Abrir WhatsApp",
+      detailTitle: "Detalle del pedido",
+    },
+    thicknessMeta: {},
+  },
 };
