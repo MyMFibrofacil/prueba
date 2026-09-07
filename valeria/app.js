@@ -67,6 +67,22 @@
     toast: byId("status-toast"),
   };
 
+  const hideEmptySummarySections = () => {
+    if (!html.summaryTotals) return;
+
+    Array.from(html.summaryTotals.children).forEach((row) => {
+      const text = String(row.textContent || "");
+      const isGrandTotal = text.includes("Total general");
+      const isEmptySection = /\$\s?0[,.]00/.test(text);
+      row.classList.toggle("hidden", !isGrandTotal && isEmptySection);
+    });
+  };
+
+  new MutationObserver(hideEmptySummarySections).observe(html.summaryTotals, {
+    childList: true,
+    subtree: true,
+  });
+
   window.PedidosApp.createAppController({
     assetPrefix: window.APP_ASSET_PREFIX || "./",
     clientConfig,
@@ -77,4 +93,5 @@
     summaryMode: clientConfig.summaryMode || "count",
     thicknessMeta: clientConfig.thicknessMeta || {},
   }).init();
+  hideEmptySummarySections();
 })();
