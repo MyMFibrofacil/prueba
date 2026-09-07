@@ -25,7 +25,7 @@ window.PEDIDOS_CLIENTS = {
     catalogMode: "moreira-categories",
     summaryMode: "value",
     sendMode: "form-post-email",
-    emailTo: "mymfibrofacil@gmail.com",
+    emailTo: "mymfibrofacil@gmail.com,mymfibrofacil.web@gmail.com",
     emailSubjectPrefix: "Moreira",
     sendEndpoint: "https://script.google.com/macros/s/AKfycbzWToLNRLOcAx7O5Ei0306FuQ39qR4d1XSbHK5tiI5npkcqVP-93nIuj3e2vk9z5w6qoQ/exec",
     ui: {
@@ -124,7 +124,7 @@ window.PEDIDOS_CLIENTS = {
     summaryMode: "value",
     hideEmptySummarySections: true,
     sendMode: "form-post-email",
-    emailTo: "mymfibrofacil@gmail.com",
+    emailTo: "mymfibrofacil@gmail.com,mymfibrofacil.web@gmail.com",
     emailSubjectPrefix: "Valeria Lotz",
     sendEndpoint: "https://script.google.com/macros/s/AKfycbzWToLNRLOcAx7O5Ei0306FuQ39qR4d1XSbHK5tiI5npkcqVP-93nIuj3e2vk9z5w6qoQ/exec",
     logoPath: "Logo.png",
