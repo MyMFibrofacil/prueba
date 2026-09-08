@@ -16,7 +16,7 @@ La app crea una pestaña por `Sección` y una card desplegable por `Categoría`.
 
 ## Envio
 
-El pedido se envía por correo a `mymfibrofacil@gmail.com` mediante el mismo Apps Script de Moreira. El asunto se genera como `Valeria Lotz - dd/mm/aaaa` y el pedido también se copia al portapapeles.
+El pedido se envía por correo a `mymfibrofacil@gmail.com` y `mymfibrofacil.web@gmail.com` mediante el mismo Apps Script de Moreira. El asunto se genera como `Valeria Lotz - dd/mm/aaaa` y el pedido también se copia al portapapeles.
 
 ## Acceso a la hoja
 

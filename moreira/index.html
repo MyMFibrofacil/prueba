@@ -80,6 +80,7 @@
       <input type="hidden" name="client_key" value="" />
       <input type="hidden" name="client_name" value="" />
       <input type="hidden" name="created_at" value="" />
+      <textarea name="order_data" class="hidden"></textarea>
     </form>
 
     <header class="sticky top-0 z-50 bg-white border-b border-primary/10 shadow-sm relative">
@@ -123,7 +124,7 @@
     <main id="catalog-scroll" class="flex-1 overflow-y-auto pb-52">
       <div id="families-container" class="px-4 py-2 space-y-4"></div>
       <p id="empty-state" class="px-4 text-sm text-slate-500 hidden">
-        No encontramos familias o productos con esa bÃºsqueda.
+        No encontramos familias o productos con esa busqueda.
       </p>
     </main>
 
@@ -217,6 +218,10 @@
     </div>
 
     <script src="../clients.js"></script>
+    <script src="../src/config/client.js"></script>
+    <script src="../src/state/create-app-state.js"></script>
+    <script src="../src/ui/dom-elements.js"></script>
+    <script src="../src/app/controller.js"></script>
     <script src="../app.js"></script>
   </body>
 </html>
