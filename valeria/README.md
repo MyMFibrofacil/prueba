@@ -12,7 +12,7 @@ Cada fila es un producto que se puede pedir. Las columnas requeridas son:
 Sección | Categoría | Producto | Modelo | Precio | Tipo
 ```
 
-La app crea una pestaña por `Sección` y una card desplegable por `Categoría`. `Modelo` es opcional y se muestra debajo del producto. `Precio` debe ser numerico.
+Al abrir el enlace, la app muestra una pestaña inicial con todas las `Categorías`. Al tocar una, se abre su lista de productos y se puede volver a la vista de categorías. También conserva las pestañas por `Sección`. `Modelo` es opcional y se muestra debajo del producto. `Precio` debe ser numerico.
 
 ## Envio
 
