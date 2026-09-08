@@ -31,6 +31,12 @@ const letterState = state.letterState;
 const materialQuantities = state.materialQuantities;
 const productQuantities = state.productQuantities;
 const variantQuantities = state.variantQuantities;
+let currentOrderId = createOrderId();
+
+function createOrderId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
 
 function escapeHtml(value) {
   return String(value || "")
@@ -580,6 +586,7 @@ function clearCurrentOrder() {
   });
 
   summaryOpen = false;
+  currentOrderId = createOrderId();
   render();
 
   if (html.catalogScroll) {
@@ -2248,6 +2255,70 @@ function buildWhatsAppText() {
   return lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
 
+function buildXubioOrderData() {
+  const items = [];
+  const addItem = (description, quantity, price) => {
+    const qty = Number(quantity);
+    const unitPrice = Number(price);
+    if (!description || !Number.isFinite(qty) || qty <= 0 || !Number.isFinite(unitPrice) || unitPrice < 0) return;
+    items.push({
+      descripcion: String(description).trim(),
+      cantidad: qty,
+      precio: unitPrice,
+    });
+  };
+
+  catalog.forEach((section) => {
+    if (isLettersSection(section.id)) {
+      lettersConfig.letters.forEach((letter) => {
+        lettersConfig.sizes.forEach((size) => {
+          addItem(
+            `${letter} ${size} mm - ${lettersConfig.materialLabel}`,
+            letterState.quantities[letter]?.[size] || 0,
+            letterState.prices[size] || 0
+          );
+        });
+      });
+      return;
+    }
+
+    if (section.type === "price-list") {
+      section.products.forEach((product) => {
+        const model = String(product.model || "").trim();
+        addItem(
+          [section.name, product.name, model].filter(Boolean).join(" - "),
+          getProductQty(product.id),
+          product.unitPrice
+        );
+      });
+      return;
+    }
+
+    if (section.type === "kits") {
+      section.families.forEach((family) => {
+        addItem(`${family.name} - Kit completo`, getFamilyQty(family.id), family.basePrice);
+        (family.materialGroups || []).forEach((group) => {
+          addItem(`${family.name} - ${group.name}`, getMaterialQty(group.id), group.basePrice);
+        });
+        family.products.forEach((product) => {
+          addItem(
+            `${family.name} - ${product.material} - ${product.object}`,
+            getProductQty(product.id),
+            product.unitPrice
+          );
+        });
+      });
+    }
+  });
+
+  return {
+    version: 1,
+    orderId: currentOrderId,
+    currency: "ARS",
+    items,
+  };
+}
+
 async function copyText(text) {
   try {
     if (navigator.clipboard?.writeText) {
@@ -2370,6 +2441,7 @@ function submitEmailForm(text) {
   assignValue("client_key", clientKey);
   assignValue("client_name", clientConfig?.name || "");
   assignValue("created_at", new Date().toISOString());
+  assignValue("order_data", JSON.stringify(buildXubioOrderData()));
 
   html.emailForm.submit();
 }
