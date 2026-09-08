@@ -32,6 +32,8 @@ const materialQuantities = state.materialQuantities;
 const productQuantities = state.productQuantities;
 const variantQuantities = state.variantQuantities;
 let currentOrderId = createOrderId();
+let categoryHomeOpen = Boolean(clientConfig?.categoryHome);
+let activeCategoryId = "";
 
 function createOrderId() {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
@@ -674,9 +676,23 @@ function toggleKitGroup(groupId) {
 }
 
 function renderTabs() {
-  html.tabs.innerHTML = getAvailableSections()
+  const categoryHomeTab = clientConfig?.categoryHome
+    ? `
+        <button
+          data-category-home
+          class="flex flex-col items-center min-w-[88px] justify-center border-b-[3px] ${
+            categoryHomeOpen ? "border-primary text-primary" : "border-transparent text-slate-500"
+          } gap-1 pb-2 pt-3"
+        >
+          <span class="material-symbols-outlined">category</span>
+          <p class="text-xs ${categoryHomeOpen ? "font-bold" : "font-medium"} whitespace-nowrap">Categorías</p>
+        </button>
+      `
+    : "";
+
+  html.tabs.innerHTML = categoryHomeTab + getAvailableSections()
     .map((section) => {
-      const active = section.id === activeThickness;
+      const active = !categoryHomeOpen && section.id === activeThickness;
       return `
         <button
           data-thickness="${escapeHtml(section.id)}"
@@ -690,6 +706,68 @@ function renderTabs() {
       `;
     })
     .join("");
+}
+
+function getCatalogCategories() {
+  return catalog.flatMap((section) =>
+    (section.categories || []).map((category) => ({
+      ...category,
+      sectionId: section.id,
+      sectionName: section.name,
+    }))
+  );
+}
+
+function renderCategoryHome() {
+  const categories = getCatalogCategories();
+  if (!categories.length) {
+    categoryHomeOpen = false;
+    renderFamilies();
+    return;
+  }
+
+  const term = searchTerm.toLowerCase();
+  const filteredCategories = !term
+    ? categories
+    : categories.filter((category) =>
+        category.name.toLowerCase().includes(term) ||
+        category.sectionName.toLowerCase().includes(term) ||
+        category.products.some((product) =>
+          `${product.name} ${product.model || ""}`.toLowerCase().includes(term)
+        )
+      );
+
+  html.families.innerHTML = filteredCategories.length
+    ? `
+      <section class="space-y-3">
+        <div class="px-1">
+          <h1 class="text-lg font-extrabold text-slate-900">Categorías</h1>
+          <p class="mt-1 text-sm text-slate-500">Elegí una categoría para ver sus productos.</p>
+        </div>
+        <div class="space-y-3">
+          ${filteredCategories
+            .map(
+              (category) => `
+                <button
+                  type="button"
+                  data-category-select="${escapeHtml(category.id)}"
+                  data-category-section="${escapeHtml(category.sectionId)}"
+                  class="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-4 text-left shadow-sm transition active:scale-[0.99]"
+                >
+                  <div class="min-w-0">
+                    <p class="text-sm font-extrabold text-slate-800">${escapeHtml(category.name)}</p>
+                    <p class="mt-1 text-xs text-slate-500">${escapeHtml(category.sectionName)} · ${category.products.length} productos</p>
+                  </div>
+                  <span class="material-symbols-outlined shrink-0 text-primary">chevron_right</span>
+                </button>
+              `
+            )
+            .join("")}
+        </div>
+      </section>
+    `
+    : "";
+  html.empty.classList.toggle("hidden", filteredCategories.length > 0);
 }
 
 function searchMatchesFamily(family) {
@@ -1479,7 +1557,10 @@ function renderPriceListSection(section) {
     return;
   }
 
-  const categories = Array.isArray(section.categories) ? section.categories : [];
+  const selectedCategory = activeCategoryId
+    ? (section.categories || []).find((category) => category.id === activeCategoryId)
+    : null;
+  const categories = selectedCategory ? [selectedCategory] : Array.isArray(section.categories) ? section.categories : [];
   const categoryMarkup = categories.length
     ? categories
         .map((category) => {
@@ -1520,12 +1601,17 @@ function renderPriceListSection(section) {
         <div class="flex items-center justify-between gap-3">
           <div>
             <p class="text-xs font-bold uppercase tracking-wide text-slate-500">Categoria</p>
-            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(section.name)}</p>
+            <p class="mt-1 text-sm font-semibold text-slate-800">${escapeHtml(selectedCategory?.name || section.name)}</p>
           </div>
           <p class="rounded-full bg-primary/10 px-3 py-1 text-xs font-bold text-primary">
             Paso ${escapeHtml(letterState.step)}
           </p>
         </div>
+        ${
+          selectedCategory && clientConfig?.categoryHome
+            ? `<button type="button" data-category-home class="flex items-center gap-1 text-sm font-bold text-primary"><span class="material-symbols-outlined text-base">arrow_back</span>Ver todas las categorías</button>`
+            : ""
+        }
         <div class="flex gap-2 overflow-x-auto scrollbar-hide">${renderQuickStepButtons()}</div>
         <button
           type="button"
@@ -1542,6 +1628,10 @@ function renderPriceListSection(section) {
 }
 
 function renderFamilies() {
+  if (categoryHomeOpen) {
+    renderCategoryHome();
+    return;
+  }
   const section = getActiveThickness();
   if (!section) {
     html.families.innerHTML = "";
@@ -2513,13 +2603,40 @@ async function sendOrder() {
 
 function bindEvents() {
   html.tabs.addEventListener("click", (event) => {
+    const categoryHomeButton = event.target.closest("[data-category-home]");
+    if (categoryHomeButton) {
+      categoryHomeOpen = true;
+      activeCategoryId = "";
+      render();
+      return;
+    }
     const button = event.target.closest("[data-thickness]");
     if (!button) return;
     activeThickness = button.dataset.thickness;
+    categoryHomeOpen = false;
+    activeCategoryId = "";
     render();
   });
 
   html.families.addEventListener("click", (event) => {
+    const categoryHomeButton = event.target.closest("[data-category-home]");
+    if (categoryHomeButton) {
+      categoryHomeOpen = true;
+      activeCategoryId = "";
+      render();
+      return;
+    }
+
+    const categoryButton = event.target.closest("[data-category-select][data-category-section]");
+    if (categoryButton) {
+      activeThickness = categoryButton.dataset.categorySection;
+      activeCategoryId = categoryButton.dataset.categorySelect;
+      categoryHomeOpen = false;
+      if (html.catalogScroll) html.catalogScroll.scrollTo({ top: 0, behavior: "smooth" });
+      render();
+      return;
+    }
+
     const toggleButton = event.target.closest("[data-family]");
     if (toggleButton) {
       toggleFamily(toggleButton.dataset.family);
