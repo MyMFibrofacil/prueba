@@ -121,6 +121,7 @@ window.PEDIDOS_CLIENTS = {
     sheetGid: "991234567",
     catalogSheetGid: "991234567",
     catalogMode: "categorized-price-list",
+    categoryHome: true,
     summaryMode: "value",
     hideEmptySummarySections: true,
     sendMode: "form-post-email",
