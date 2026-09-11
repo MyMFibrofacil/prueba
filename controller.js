@@ -2531,15 +2531,48 @@ function submitEmailForm(text) {
   assignValue("client_key", clientKey);
   assignValue("client_name", clientConfig?.name || "");
   assignValue("created_at", new Date().toISOString());
-  assignValue("order_data", JSON.stringify(buildXubioOrderData()));
+  if (clientConfig?.sendXubioOrder !== false) {
+    assignValue("order_data", JSON.stringify(buildXubioOrderData()));
+  }
 
   html.emailForm.submit();
+}
+
+function openWhatsApp(text, copied) {
+  const encodedText = encodeURIComponent(text);
+  const deepLink = `whatsapp://send?text=${encodedText}`;
+  const webLink = `https://api.whatsapp.com/send?text=${encodedText}`;
+
+  window.open(deepLink, "_blank");
+  setTimeout(() => {
+    window.open(webLink, "_blank");
+  }, 400);
+
+  return copied
+    ? "Pedido copiado. WhatsApp se abrio con el pedido y tambien se envio por mail."
+    : "WhatsApp se abrio con el pedido y tambien se envio por mail.";
 }
 
 async function sendOrder() {
   const text = buildWhatsAppText();
   const copied = await copyText(text);
   const sendMode = getSendMode();
+
+  if (sendMode === "whatsapp-and-form-post-email") {
+    try {
+      const whatsappStatus = openWhatsApp(text, copied);
+      emailSubmissionPending = true;
+      pendingEmailStatusMessage = whatsappStatus;
+      setStatus("Enviando pedido por mail...");
+      submitEmailForm(text);
+    } catch (error) {
+      emailSubmissionPending = false;
+      pendingEmailStatusMessage = "";
+      const detail = error instanceof Error ? error.message : "No se pudo enviar el pedido por mail.";
+      setStatus(detail, "error");
+    }
+    return;
+  }
 
   if (sendMode === "form-post-email") {
     try {
@@ -2585,20 +2618,7 @@ async function sendOrder() {
     return;
   }
 
-  const encodedText = encodeURIComponent(text);
-  const deepLink = `whatsapp://send?text=${encodedText}`;
-  const webLink = `https://api.whatsapp.com/send?text=${encodedText}`;
-
-  window.open(deepLink, "_blank");
-  setTimeout(() => {
-    window.open(webLink, "_blank");
-  }, 400);
-
-  if (copied) {
-    setStatus("Pedido copiado. Elegi el grupo en WhatsApp y envia el mensaje.", "success");
-  } else {
-    setStatus("WhatsApp se abrio con el pedido. Si no aparece el texto, copialo desde el resumen.", "error");
-  }
+  setStatus(openWhatsApp(text, copied), copied ? "success" : "error");
 }
 
 function bindEvents() {
