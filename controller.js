@@ -2561,11 +2561,11 @@ async function sendOrder() {
 
   if (sendMode === "whatsapp-and-form-post-email") {
     try {
-      const whatsappStatus = openWhatsApp(text, copied);
       emailSubmissionPending = true;
-      pendingEmailStatusMessage = whatsappStatus;
       setStatus("Enviando pedido por mail...");
       submitEmailForm(text);
+      const whatsappStatus = openWhatsApp(text, copied);
+      pendingEmailStatusMessage = whatsappStatus;
     } catch (error) {
       emailSubmissionPending = false;
       pendingEmailStatusMessage = "";
