@@ -52,7 +52,8 @@ La configuracion vive en [clients.js](./clients.js).
 - `thicknessMeta`:
   - `3` => `3 mm`
   - `15` => `15 mm`
-- `sendMode`: WhatsApp
+- `sendMode`: WhatsApp + mail automático
+- abre WhatsApp con el pedido precargado y envía una copia a `mymfibrofacil.web@gmail.com`
 
 ### Moreira
 
