@@ -2440,6 +2440,7 @@ async function copyText(text) {
 }
 
 function getSendMode() {
+  if (clientConfig?.sendMode === "whatsapp-and-form-post-email") return "whatsapp-and-form-post-email";
   if (clientConfig?.sendMode === "form-post-email") return "form-post-email";
   if (clientConfig?.sendMode === "direct-email") return "direct-email";
   if (clientConfig?.sendMode === "email") return "email";
