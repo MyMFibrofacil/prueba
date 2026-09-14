@@ -54,6 +54,9 @@ La configuracion vive en [clients.js](./clients.js).
   - `15` => `15 mm`
 - `sendMode`: WhatsApp + mail automático
 - abre WhatsApp con el pedido precargado y envía una copia a `mymfibrofacil.web@gmail.com`
+- crea automáticamente un presupuesto de Xubio para `CARPINTERIA RIVADAVIA SA` (`7756831`)
+- agrupa las cantidades por espesor y utiliza `S- Corte Placa 3mm` (`2465942`) o `S- Corte Placa 15mm` (`2465943`)
+- obtiene los precios desde la lista de Xubio `10194`
 
 ### Moreira
 
