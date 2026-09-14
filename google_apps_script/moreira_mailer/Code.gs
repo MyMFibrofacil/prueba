@@ -19,16 +19,21 @@ const XUBIO = {
     condicionDePago: 2,
     centroCostoId: 66456,
   },
-  clients: {
-    rivadavia: {
+  clientsById: {
+    "7756831": {
       id: 7756831,
       name: "CARPINTERIA RIVADAVIA SA",
       listaPrecioId: 10194,
       priceFromList: true,
       productsByThickness: { "3": 2465942, "15": 2465943 },
     },
-    moreira: { id: 5481719, name: "ALEJANDRO FABIAN MOREIRA DUPLAA" },
-    valeria: { id: 5482182, name: "HORACIO MAXIMILIANO NERVI / Valeria Lotz" },
+    "5481719": { id: 5481719, name: "ALEJANDRO FABIAN MOREIRA DUPLAA" },
+    "5482182": { id: 5482182, name: "HORACIO MAXIMILIANO NERVI / Valeria Lotz" },
+  },
+  clientsByKey: {
+    rivadavia: "7756831",
+    moreira: "5481719",
+    valeria: "5482182",
   },
 };
 
@@ -99,14 +104,20 @@ function getPayload(e) {
 }
 
 function crearPresupuestoXubio(payload) {
+  const requestedClientId = Number(
+    payload.client_id || payload.clientId || payload.cliente_id || payload.clienteId
+  );
   const clientKey = String(payload.client_key || payload.clientKey || "").trim().toLowerCase();
-  const client = XUBIO.clients[clientKey];
+  const resolvedClientId = Number.isInteger(requestedClientId) && requestedClientId > 0
+    ? String(requestedClientId)
+    : XUBIO.clientsByKey[clientKey];
+  const client = XUBIO.clientsById[resolvedClientId];
   if (!client) {
     throw new Error("El pedido no corresponde a un cliente habilitado para Xubio.");
   }
 
   const order = parseOrderData(payload.order_data || payload.orderData);
-  const idempotencyKey = `xubio-presupuesto-${clientKey}-${order.orderId}`;
+  const idempotencyKey = `xubio-presupuesto-${client.id}-${order.orderId}`;
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try {
@@ -142,7 +153,7 @@ function crearPresupuestoXubio(payload) {
       presupuestoId: result && (result.ID || result.id || result.presupuestoId) || null,
       transaccionId: Number(result && (result.transaccionid || result.transaccionId)) || null,
       orderId: order.orderId,
-      clientKey,
+      clientKey: resolvedClientId,
     };
     properties.setProperty(idempotencyKey, JSON.stringify(record));
     return record;
