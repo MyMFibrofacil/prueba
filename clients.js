@@ -14,7 +14,15 @@ window.PEDIDOS_CLIENTS = {
     sendMode: "whatsapp-and-form-post-email",
     emailTo: "mymfibrofacil.web@gmail.com",
     sendEndpoint: "https://script.google.com/macros/s/AKfycbwlEwt2SvBLacxP1hTl8RhjgBOCuo_aebePiPXA8RdcLOpZfgLFaFOTq0GxIjaO-RJxig/exec",
-    sendXubioOrder: false,
+    sendXubioOrder: true,
+    xubio: {
+      mode: "rivadavia-corte-placa",
+      listaPrecioId: 10194,
+      productoPorEspesor: {
+        "3": 2465942,
+        "15": 2465943,
+      },
+    },
     thicknessMeta: {
       "3": { id: "3", label: "3 mm", summaryLabel: "3mm", messageLabel: "3mm", icon: "view_week" },
       "15": { id: "15", label: "15 mm", summaryLabel: "15mm", messageLabel: "15mm", icon: "splitscreen" },

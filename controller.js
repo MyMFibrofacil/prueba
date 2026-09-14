@@ -2346,6 +2346,34 @@ function buildWhatsAppText() {
 }
 
 function buildXubioOrderData() {
+  if (clientConfig?.xubio?.mode === "rivadavia-corte-placa") {
+    const data = summary();
+    const productoPorEspesor = clientConfig.xubio.productoPorEspesor || {};
+    const items = Object.entries(productoPorEspesor)
+      .map(([espesor, productoId]) => ({
+        espesor,
+        productoId: Number(productoId),
+        descripcion: `Corte de placa ${espesor} mm`,
+        cantidad: Number(data.totalsByThickness?.[espesor] || 0),
+        precio: 0,
+      }))
+      .filter(
+        (item) =>
+          Number.isInteger(item.productoId) &&
+          item.productoId > 0 &&
+          Number.isFinite(item.cantidad) &&
+          item.cantidad > 0
+      );
+
+    return {
+      version: 2,
+      orderId: currentOrderId,
+      currency: "ARS",
+      listaPrecioId: Number(clientConfig.xubio.listaPrecioId) || null,
+      items,
+    };
+  }
+
   const items = [];
   const addItem = (description, quantity, price) => {
     const qty = Number(quantity);
@@ -2561,11 +2589,11 @@ async function sendOrder() {
 
   if (sendMode === "whatsapp-and-form-post-email") {
     try {
+      const whatsappStatus = openWhatsApp(text, copied);
       emailSubmissionPending = true;
+      pendingEmailStatusMessage = whatsappStatus;
       setStatus("Enviando pedido por mail...");
       submitEmailForm(text);
-      const whatsappStatus = openWhatsApp(text, copied);
-      pendingEmailStatusMessage = whatsappStatus;
     } catch (error) {
       emailSubmissionPending = false;
       pendingEmailStatusMessage = "";
