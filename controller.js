@@ -2512,6 +2512,7 @@ async function sendDirectEmail(text) {
     subject: getEmailSubject(),
     body: text,
     clientKey,
+    clientId: clientConfig?.xubio?.clienteId || "",
     clientName: clientConfig?.name || "",
     createdAt: new Date().toISOString(),
   });
@@ -2559,6 +2560,7 @@ function submitEmailForm(text) {
   assignValue("body", text);
   assignValue("client_key", clientKey);
   assignValue("client_name", clientConfig?.name || "");
+  assignValue("client_id", clientConfig?.xubio?.clienteId || "");
   assignValue("created_at", new Date().toISOString());
   if (clientConfig?.sendXubioOrder !== false) {
     assignValue("order_data", JSON.stringify(buildXubioOrderData()));

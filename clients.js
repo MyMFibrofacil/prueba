@@ -16,6 +16,7 @@ window.PEDIDOS_CLIENTS = {
     sendEndpoint: "https://script.google.com/macros/s/AKfycbwlEwt2SvBLacxP1hTl8RhjgBOCuo_aebePiPXA8RdcLOpZfgLFaFOTq0GxIjaO-RJxig/exec",
     sendXubioOrder: true,
     xubio: {
+      clienteId: 7756831,
       mode: "rivadavia-corte-placa",
       listaPrecioId: 10194,
       productoPorEspesor: {
