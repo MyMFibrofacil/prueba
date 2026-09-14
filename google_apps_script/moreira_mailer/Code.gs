@@ -1,3 +1,4 @@
+const FABRICAAPP_CLIENT_ID = 7756831;
 const DEFAULT_TO = "mymfibrofacil@gmail.com,mymfibrofacil.web@gmail.com";
 const DEFAULT_SUBJECT_PREFIX = "Moreira";
 const PRINT_NOTIFICATION_TO = DEFAULT_TO;
@@ -53,8 +54,8 @@ function doPost(e) {
 
     let presupuesto = { created: false, skipped: true };
     let xubioError = "";
-    let printError = "";
-    if (payload.order_data || payload.orderData) {
+    let printError = ""; const routeToFabricaApp = shouldRouteToFabricaApp(payload);
+    if ((payload.order_data || payload.orderData) && !routeToFabricaApp) {
       try {
         presupuesto = crearPresupuestoXubio(payload);
       } catch (error) {
@@ -84,7 +85,7 @@ function doPost(e) {
       replyTo: String(payload.from || "").trim() || undefined,
     });
 
-    return jsonResponse({ ok: !xubioError && !printError, presupuesto, error: xubioError || printError || undefined });
+    return jsonResponse({ ok: !xubioError && !printError, routedToFabricaApp: routeToFabricaApp, presupuesto, error: xubioError || printError || undefined });
   } catch (error) {
     console.error(error && error.stack ? error.stack : error);
     return jsonResponse({
@@ -94,7 +95,7 @@ function doPost(e) {
   }
 }
 
-function getPayload(e) {
+function shouldRouteToFabricaApp(payload) { const requestedClientId = Number(payload.client_id || payload.clientId || payload.cliente_id || payload.clienteId); if (requestedClientId === FABRICAAPP_CLIENT_ID) return true; const clientKey = String(payload.client_key || payload.clientKey || "").trim().toLowerCase(); return clientKey === "rivadavia"; } function getPayload(e) {
   const params = (e && e.parameter) || {};
   if (params.body || params.subject || params.to || params.from) {
     return params;
