@@ -12,6 +12,7 @@ Hoy el foco principal de este repo esta en `Rivadavia`, que usa Google Sheets co
 - [rivadavia/index.html](./rivadavia/index.html): entrada directa para Rivadavia.
 - [moreira/index.html](./moreira/index.html): entrada directa para Moreira.
 - [valeria/index.html](./valeria/index.html): entrada directa para Valeria Lotz.
+- [alan_alfonsin/index.html](./alan_alfonsin/index.html): versión de prueba para Alan Alfonsín / Odin Led.
 - [google_apps_script/moreira_mailer/Code.gs](./google_apps_script/moreira_mailer/Code.gs): envio por mail usado por Moreira.
 
 ## Como abrir la app
@@ -20,7 +21,7 @@ No hay backend ni `main.py`. Es una app estatica.
 
 Opciones recomendadas:
 
-1. Abrir la subcarpeta del cliente, por ejemplo [rivadavia/index.html](./rivadavia/index.html), [moreira/index.html](./moreira/index.html) o [valeria/index.html](./valeria/index.html).
+1. Abrir la subcarpeta del cliente, por ejemplo [rivadavia/index.html](./rivadavia/index.html), [moreira/index.html](./moreira/index.html), [valeria/index.html](./valeria/index.html) o [alan_alfonsin/index.html](./alan_alfonsin/index.html).
 2. Abrir [index.html](./index.html) si queres usar la portada selector.
 3. Mejor: servir la carpeta con `Live Server` o cualquier servidor estatico local.
 
@@ -269,5 +270,6 @@ Con esta estructura se pueden publicar rutas como:
 - `/Pedidos_wpp/rivadavia/`
 - `/Pedidos_wpp/moreira/`
 - `/Pedidos_wpp/valeria/`
+- `/prueba/alan_alfonsin/` (entorno de prueba)
 
 Cada subruta usa la misma logica compartida, pero carga solo la configuracion del cliente correspondiente.
