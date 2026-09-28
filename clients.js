@@ -157,7 +157,7 @@ window.PEDIDOS_CLIENTS = {
     sheetGid: "347170189",
     catalogSheetGid: "347170189",
     catalogMode: "categorized-price-list",
-    categoryHome: true,
+    categoryHome: false,
     summaryMode: "value",
     hideEmptySummarySections: true,
     sendMode: "whatsapp-and-form-post-email",
@@ -173,5 +173,8 @@ window.PEDIDOS_CLIENTS = {
       detailTitle: "Detalle del pedido",
     },
     thicknessMeta: {},
+    sectionLabels: {
+      "mdf-3mm-y-5mm": "Categorías",
+    },
   },
 };

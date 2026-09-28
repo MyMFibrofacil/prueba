@@ -693,6 +693,7 @@ function renderTabs() {
   html.tabs.innerHTML = categoryHomeTab + getAvailableSections()
     .map((section) => {
       const active = !categoryHomeOpen && section.id === activeThickness;
+      const tabLabel = clientConfig?.sectionLabels?.[section.id] || section.name;
       return `
         <button
           data-thickness="${escapeHtml(section.id)}"
@@ -701,7 +702,7 @@ function renderTabs() {
           } gap-1 pb-2 pt-3"
         >
           <span class="material-symbols-outlined">${escapeHtml(section.icon)}</span>
-          <p class="text-xs ${active ? "font-bold" : "font-medium"} whitespace-nowrap">${escapeHtml(section.name)}</p>
+          <p class="text-xs ${active ? "font-bold" : "font-medium"} whitespace-nowrap">${escapeHtml(tabLabel)}</p>
         </button>
       `;
     })
