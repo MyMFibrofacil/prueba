@@ -174,7 +174,7 @@ window.PEDIDOS_CLIENTS = {
     },
     thicknessMeta: {},
     sectionLabels: {
-      "mdf-3mm-y-5mm": "Categorías",
+      "section-mdf-3mm-y-5mm": "Categorías",
     },
   },
 };
