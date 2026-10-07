@@ -32,10 +32,10 @@ window.PEDIDOS_CLIENTS = {
   moreira: {
     key: "moreira",
     name: "Moreira",
-    sheetId: "1rz_fOaMzuThxT-C9g9pv2AicV2wmTUo4lzUhI0xgaFw",
+    sheetId: "1tD0qUBePV0-UPSKwXmf9fNDHEO8u4dOtfDyvKerxVvc",
     sheetGid: "0",
-    catalogSheetGid: "756737057",
-    catalogMode: "moreira-categories",
+    catalogSheetGid: "0",
+    catalogMode: "moreira-shared-price-list",
     summaryMode: "value",
     sendMode: "form-post-email",
     emailTo: "mymfibrofacil@gmail.com,mymfibrofacil.web@gmail.com",
