@@ -1593,7 +1593,7 @@ function renderPriceListSection(section) {
         })
         .join("")
     : `<div class="divide-y divide-slate-100 rounded-2xl border border-slate-200 overflow-hidden bg-white">
-        ${filteredProducts.map((product) => renderValueProductRow(product)).join("")}
+        ${filteredProducts.map((product) => renderValueProductRow(product, product.model || "")).join("")}
       </div>`;
 
   html.families.innerHTML = `
@@ -2081,6 +2081,11 @@ function renderSummary() {
                       return `
                         <div class="rounded-xl border border-slate-200 bg-white px-3 py-3">
                           <p class="text-sm font-semibold text-slate-800">${escapeHtml(product.name)}</p>
+                          ${
+                            Array.isArray(product.contents) && product.contents.length > 1
+                              ? `<p class="mt-1 text-xs text-slate-500">Incluye: ${escapeHtml(product.contents.join(" + "))}</p>`
+                              : ""
+                          }
                           <p class="mt-1 text-xs text-slate-500">- Cantidad: ${product.qty}</p>
                         </div>
                       `;
@@ -2291,6 +2296,9 @@ function buildWhatsAppText() {
     if (section.type === "price-list") {
       section.products.forEach((product) => {
         lines.push(`${sanitizeMessageText(product.name)}`);
+        if (Array.isArray(product.contents) && product.contents.length > 1) {
+          lines.push(`- Incluye: ${sanitizeMessageText(product.contents.join(" + "))}`);
+        }
         lines.push(`- Cantidad: ${product.qty}`);
       });
       return;
@@ -3254,6 +3262,85 @@ async function loadCatalogFromSheet() {
             products: category.products.sort((a, b) => a.sortIndex - b.sortIndex),
           })),
       }));
+  }
+
+  if (clientConfig?.catalogMode === "bongiovanni-bundles") {
+    const sourceData = await loadSheetData(clientConfig.catalogSheetGid || clientConfig.sheetGid);
+    const columns = sourceData?.table?.cols || [];
+    const sourceRows = sourceData?.table?.rows || [];
+    const indexes = Object.fromEntries(
+      columns.map((column, index) => [normalizeSheetLabel(column.label), index])
+    );
+    const getCell = (cells, label) => {
+      const index = indexes[normalizeSheetLabel(label)];
+      const value = index === undefined ? "" : cells[index]?.v;
+      return value === null || value === undefined ? "" : value;
+    };
+    const parseBongiovanniPrice = (value) => {
+      if (typeof value === "number" && Number.isFinite(value)) return value;
+
+      const text = String(value || "")
+        .replace(/[^\d,.-]/g, "")
+        .trim();
+      if (!text) return 0;
+
+      const normalized = text.includes(",")
+        ? text.replace(/\./g, "").replace(",", ".")
+        : text;
+      const numeric = Number(normalized);
+      return Number.isFinite(numeric) ? numeric : 0;
+    };
+
+    const bundles = [];
+    let currentBundle = null;
+
+    sourceRows.forEach((row, rowIndex) => {
+      const cells = row.c || [];
+      const productName = String(getCell(cells, "Producto")).trim();
+      const componentName = String(getCell(cells, "salen")).trim();
+      const unitPrice = parseBongiovanniPrice(getCell(cells, "$ Unitario"));
+
+      if (productName) {
+        currentBundle = {
+          id: `prd-bongiovanni-${slugify(productName)}-${rowIndex}`,
+          name: productName,
+          components: [],
+          sortIndex: rowIndex,
+        };
+        bundles.push(currentBundle);
+      }
+
+      if (!currentBundle || !componentName || unitPrice <= 0) return;
+      currentBundle.components.push({ name: componentName, unitPrice });
+    });
+
+    const products = bundles
+      .filter((bundle) => bundle.components.length > 0)
+      .map((bundle) => ({
+        id: bundle.id,
+        name: bundle.name,
+        model:
+          bundle.components.length > 1
+            ? `Incluye: ${bundle.components.map((component) => component.name).join(" + ")}`
+            : "",
+        contents: bundle.components.map((component) => component.name),
+        unitPrice: bundle.components.reduce((sum, component) => sum + component.unitPrice, 0),
+        sortIndex: bundle.sortIndex,
+      }));
+
+    return products.length
+      ? [
+          {
+            id: "bongiovanni",
+            name: "Productos",
+            summaryLabel: "Productos",
+            icon: "inventory_2",
+            type: "price-list",
+            families: [],
+            products,
+          },
+        ]
+      : [];
   }
 
   const data = await loadSheetData(clientConfig.sheetGid);
