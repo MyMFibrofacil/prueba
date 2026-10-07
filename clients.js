@@ -2,8 +2,8 @@ window.PEDIDOS_CLIENTS = {
   rivadavia: {
     key: "rivadavia",
     name: "Rivadavia",
-    sheetId: "1gOnrFRnQuEq6GnfpzA9XcIUZkE35z5sq5ENP38tRMho",
-    sheetGid: "0",
+    sheetId: "1tD0qUBePV0-UPSKwXmf9fNDHEO8u4dOtfDyvKerxVvc",
+    sheetGid: "797684977",
     logoPath: "Logo.png",
     ui: {
       title: "Pedidos Rivadavia",
@@ -130,9 +130,9 @@ window.PEDIDOS_CLIENTS = {
   valeria: {
     key: "valeria",
     name: "Valeria Lotz",
-    sheetId: "1uT9zGZI_SkTyESlOqaIl1iLpCcxYz4RnB2mTwBQ42Z4",
-    sheetGid: "991234567",
-    catalogSheetGid: "991234567",
+    sheetId: "1tD0qUBePV0-UPSKwXmf9fNDHEO8u4dOtfDyvKerxVvc",
+    sheetGid: "2117152575",
+    catalogSheetGid: "2117152575",
     catalogMode: "categorized-price-list",
     categoryHome: true,
     summaryMode: "value",
@@ -153,9 +153,9 @@ window.PEDIDOS_CLIENTS = {
   alan_alfonsin: {
     key: "alan_alfonsin",
     name: "Alan Alfonsín",
-    sheetId: "1UTsGNRI8A0fg83vuDJENXetbZ7vK-F0BwkPE-uSjTgk",
-    sheetGid: "347170189",
-    catalogSheetGid: "347170189",
+    sheetId: "1tD0qUBePV0-UPSKwXmf9fNDHEO8u4dOtfDyvKerxVvc",
+    sheetGid: "1372255980",
+    catalogSheetGid: "1372255980",
     catalogMode: "categorized-price-list",
     categoryHome: false,
     summaryMode: "value",
